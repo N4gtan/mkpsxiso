@@ -97,7 +97,7 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	return entries.back();
 }
 
-bool iso::DirTreeClass::AddFileEntry(std::string &id, EntryType type, fs::path& srcfile, const EntryAttributes& attributes, const char *trackid)
+bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path srcfile, const EntryAttributes& attributes, const char *trackid)
 {
 	auto fileAttrib = Stat(srcfile);
     if ( !fileAttrib )
@@ -234,7 +234,7 @@ void iso::DirTreeClass::AddDummyEntry(const unsigned int sectors, const unsigned
 	entriesInDir.emplace_back(entries.back());
 }
 
-iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string &id, fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists)
+iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, fs::path srcDir, const EntryAttributes& attributes, bool& alreadyExists)
 {
 	// Duplicate directory entries are allowed, but the subsequent occurences will not add
 	// a new directory to 'entries'.
