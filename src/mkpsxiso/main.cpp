@@ -1113,21 +1113,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	if ( licenseElement != nullptr )
 	{
-		if ( const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE); license_file_attrib != nullptr )
+		if ( const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE); license_file_attrib != nullptr && *license_file_attrib != 0 )
 		{
-			const fs::path license_file = xmlPath / license_file_attrib;
-			if ( license_file.empty() )
-			{
-				if ( !global::QuietMode )
-				{
-					printf( "    " );
-				}
-
-				printf("ERROR: File attribute of <license> element is missing "
-					"or blank on line %d\n.", licenseElement->GetLineNum() );
-
-				return false;
-			}
+			const fs::path license_file = (xmlPath / license_file_attrib).lexically_normal();
 
 			if ( !global::QuietMode )
 			{
@@ -1168,8 +1156,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 				printf( "    " );
 			}
 
-			printf( "ERROR: <license> element has no file attribute on line %d.\n",
-				licenseElement->GetLineNum() );
+			printf( "ERROR: File attribute of <license> element is missing "
+				"or blank on line %d.\n", licenseElement->GetLineNum() );
 
 			return false;
 		}
