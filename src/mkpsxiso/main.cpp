@@ -375,7 +375,7 @@ int Main(int argc, char* argv[])
 		// Check if image_name attribute is specified
 		if ( global::ImageName.empty() )
 		{
-			if ( const char* image_name = projectElement->Attribute(xml::attrib::IMAGE_NAME); image_name != nullptr )
+			if ( const char* image_name = projectElement->Attribute(xml::attrib::IMAGE_NAME); image_name != nullptr && *image_name != 0 )
 			{
 				global::ImageName = image_name;
 			}
@@ -575,7 +575,7 @@ int Main(int argc, char* argv[])
 				}
 
 				// Write track information to the CUE sheet
-				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr )
+				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr || *trackRelativeSource == 0 )
 				{
 					if ( !global::QuietMode )
 					{
@@ -1382,9 +1382,9 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 				return false;
 			}
 			trackid = dirElement->Attribute(xml::attrib::TRACK_ID);
-			if ( trackid == nullptr )
+			if ( trackid == nullptr || *trackid == 0 )
 			{
-				printf( "ERROR: DA audio file(s) does not have an associated CDDA track [trackid]\n" );
+				printf( "ERROR: DA audio file '%s' on line %d does not have an associated CDDA trackid.\n", name.c_str(), dirElement->GetLineNum() );
 				return false;
 			}
 			// locate the node containing the tracks
@@ -1418,7 +1418,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			}
 			// set the src file to the trackid source
 			sourceElement = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
-			if(sourceElement == nullptr)
+			if(sourceElement == nullptr || *sourceElement == 0)
 			{
 				printf( "ERROR: <%s %s=\"audio\" %s=\"%s\"> must have source\n", xml::elem::TRACK, xml::attrib::TRACK_TYPE, xml::attrib::TRACK_ID, trackid);
 				return false;
