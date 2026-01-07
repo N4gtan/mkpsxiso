@@ -1265,7 +1265,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
 	const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE);
 
-	if ( nameElement == nullptr && sourceElement == nullptr )
+	if ( (nameElement == nullptr || *nameElement == 0) && (sourceElement == nullptr || *sourceElement == 0) )
 	{
 		if ( !global::QuietMode )
 		{
@@ -1279,40 +1279,53 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	}
 
 	fs::path srcFile;
-	if ( sourceElement != nullptr )
-	{
-		srcFile = sourceElement;
-	}
-
 	std::string name;
-	if ( nameElement != nullptr )
+	if ( sourceElement != nullptr && *sourceElement != 0 )
 	{
-		name = nameElement;
+		srcFile = (xmlPath / sourceElement).lexically_normal();
+
+		if ( nameElement != nullptr && *nameElement != 0 )
+		{
+			name = nameElement;
+		}
+		else
+		{
+			name = srcFile.filename().string();
+		}
 	}
 	else
 	{
-		name = srcFile.filename().string();
+		name = nameElement;
+		srcFile = xmlPath / name;
 	}
 
-	if ( srcFile.empty() )
-	{
-		srcFile = name;
-	}
-
-	if ( name.find_first_of( "\\/" ) != std::string::npos )
-	{
-		if ( !global::QuietMode )
+	{ // ECMA-119 7.5.1 - File Identifier shall contain one dot and uppercase alphanumeric characters or underscores.
+		int dots = 0;
+    	for (char &ch : name)
 		{
-			printf("      ");
+			if (ch == '.')
+			{
+				if (++dots > 1)
+				{
+					printf("ERROR: File name '%s' on line %d shall contain only one dot.\n", name.c_str(), dirElement->GetLineNum());
+					return false;
+				}
+			}
+        	else if (isalnum((unsigned char)ch))
+			{
+				ch = std::toupper((unsigned char)ch);
+			}
+			else if (ch != '_')
+			{
+				printf("ERROR: File name '%s' on line %d contains an invalid character '%c'.\n", name.c_str(), dirElement->GetLineNum(), ch);
+				return false;
+			}
 		}
-
-		printf( "ERROR: Name attribute for file entry '%s' cannot be "
-			"a path on line %d.\n", name.c_str(),
-			dirElement->GetLineNum() );
-
-		return false;
+		if (dots == 0)
+			name += '.';
 	}
 
+	// ECMA-119 7.5.1 and 10.1 - File Identifier shall be 1-30 characters long plus one dot.
 	if ( name.size() > 12 )
 	{
 		if ( name.size() > 31 )
@@ -1330,9 +1343,8 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			printf( "WARNING: File name '%s' on line %d is more than 12 "
 				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 		}
-	}
 
-	{ // ECMA-119 6.8.2.1 - The path length of any file shall not exceed 255.
+		// ECMA-119 6.8.2.1 - The path length of any file shall not exceed 255.
 		size_t pathLength = (name + ";1").length();
 		int depth = dirTree->GetPathDepth(&pathLength);
 		if (pathLength + depth > 255)
@@ -1411,7 +1423,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 				printf( "ERROR: <%s %s=\"audio\" %s=\"%s\"> must have source\n", xml::elem::TRACK, xml::attrib::TRACK_TYPE, xml::attrib::TRACK_ID, trackid);
 				return false;
 			}
-			srcFile = sourceElement;
+			srcFile = (xmlPath / sourceElement).lexically_normal();
 		}
 		else
 		{
@@ -1428,7 +1440,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 	}
 
-	return dirTree->AddFileEntry(name.c_str(), entry, xmlPath / srcFile, ReadEntryAttributes(defaultAttributes, dirElement), trackid);
+	return dirTree->AddFileEntry(name, entry, srcFile, ReadEntryAttributes(defaultAttributes, dirElement), trackid);
 }
 
 static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
