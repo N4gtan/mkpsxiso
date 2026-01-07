@@ -1445,13 +1445,34 @@ static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLEleme
 
 static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
 {
-	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
-	if ( strlen( nameElement ) > 12 )
+	fs::path srcDir;
+	std::string name;
+	if (const char *sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE); sourceElement != nullptr && *sourceElement != 0)
 	{
-		if ( strlen( nameElement ) > 31 )
+		srcDir = (xmlPath / sourceElement).lexically_normal();
+	}
+
+	if (const char *nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME); nameElement != nullptr && *nameElement != 0)
+	{
+		name = nameElement;
+	}
+	else if (!srcDir.empty())
+	{
+		name = srcDir.filename().string();
+	}
+	else
+	{
+		printf("ERROR: Directory name missing on line %d.\n", dirElement->GetLineNum());
+		return false;
+	}
+
+	// ECMA-119 7.6.3 and 10.1 - Directory Identifier shall be 1-31 characters long.
+	if ( name.length() > 8 )
+	{
+		if ( name.length() > 31 )
 		{
 			printf( "ERROR: Directory name '%s' on line %d is more than 31 "
-				"characters long.\n", nameElement, dirElement->GetLineNum() );
+				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 			return false;
 		}
 		if ( !global::noWarns )
@@ -1460,15 +1481,9 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 			{
 				printf("      ");
 			}
-			printf( "WARNING: Directory name '%s' on line %d is more than 12 "
-				"characters long.\n", nameElement, dirElement->GetLineNum() );
+			printf( "WARNING: Directory name '%s' on line %d is more than 8 "
+				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 		}
-	}
-
-	fs::path srcDir;
-	if (const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE); sourceElement != nullptr)
-	{
-		srcDir = xmlPath / sourceElement;
 	}
 
 	{ // ECMA-119 6.8.2.1 - The number of levels in the hierarchy shall not exceed eight.
@@ -1480,9 +1495,24 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 		}
 	}
 
+	// ECMA-119 7.6.1 - Directory Identifier shall contain uppercase alphanumeric characters or underscores.
+    for (char &ch : name)
+	{
+		if (isalnum((unsigned char)ch))
+		{
+			ch = std::toupper((unsigned char)ch);
+		}
+		else if (ch != '_')
+		{
+			printf("ERROR: Directory name '%s' on line %d contains an invalid character '%c'.\n",
+				name.c_str(), dirElement->GetLineNum(), ch);
+			return false;
+		}
+	}
+
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		nameElement, srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		name, srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
 
 	if ( subdir == nullptr )
 	{

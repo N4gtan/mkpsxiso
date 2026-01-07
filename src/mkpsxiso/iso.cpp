@@ -254,7 +254,7 @@ void iso::DirTreeClass::AddDummyEntry(const unsigned int sectors, const unsigned
 	entriesInDir.emplace_back(entries.back());
 }
 
-iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(const char* id, const fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists)
+iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string &id, fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists)
 {
 	// Duplicate directory entries are allowed, but the subsequent occurences will not add
 	// a new directory to 'entries'.
@@ -275,28 +275,20 @@ iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(const char* id, const fs::p
 	{
 		fileAttrib.emplace().st_mtime = global::BuildTime;
 	
-		if ( id != nullptr && !global::noWarns )
+		if ( !global::noWarns )
 		{
 			if ( !global::QuietMode )
 			{
 				printf( "\n    " );
 			}
 
-			printf( "WARNING: 'source' attribute for subdirectory '%s' is invalid or empty.\n", id );
+			printf( "WARNING: 'source' attribute for subdirectory '%s' is invalid or empty.\n", id.c_str() );
 		}
 	}
 
 	DIRENTRY entry {};
 
-	if (id != nullptr)
-	{
-		entry.id = id;
-		for ( char& ch : entry.id )
-		{
-			ch = toupper( ch );
-		}
-	}
-
+	entry.id		= std::move(id);
 	entry.type		= EntryType::EntryDir;
 	entry.subdir	= std::make_unique<DirTreeClass>(entries, this);
 	entry.HF		= attributes.HFLAG % 4;
