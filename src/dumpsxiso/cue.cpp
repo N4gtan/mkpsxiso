@@ -25,18 +25,35 @@ CueFile parseCueFile(fs::path& inputFile)
 	int pregapStartSector = 0;
 	int previousStartSector = 0;
 
+	auto finalizeTrack = [&cueFile](TrackInfo &lastTrack) -> void
+	{
+		lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
+		lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+	};
+	
+	auto parseCueTime = [lineNumber](std::string_view line, const size_t offset) -> int
+	{
+		std::string timecode(line.substr(offset, line.find_first_of("\r\n") - offset));
+		int sectors = TimecodeToSectors(timecode);
+		if (sectors < 0)
+		{
+			printf("Error: Invalid cue file timecode \"%s\" on line %d\n", timecode.c_str(), lineNumber);
+			exit(EXIT_FAILURE);
+		}
+		return sectors;
+	};
+
 	char buffer[1024];
 	while (std::fgets(buffer, sizeof(buffer), file.get()) != nullptr)
 	{
+		size_t commandStart;
 		std::string_view line(buffer);
-		if (line.find("FILE") != std::string::npos)
-		{
 
+		if (commandStart = line.find("FILE"); commandStart != std::string::npos)
+		{
 			if (!cueFile.tracks.empty())
 			{
-				TrackInfo &lastTrack = cueFile.tracks.back();
-				lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
-				lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+				finalizeTrack(cueFile.tracks.back());
 				cueFile.multiBIN = true;
 			}
 
@@ -75,11 +92,10 @@ CueFile parseCueFile(fs::path& inputFile)
 				inputFile = filePath;
 			}
 		}
-		else if (line.find("TRACK") != std::string::npos)
+		else if (commandStart = line.find("TRACK"); commandStart != std::string::npos)
 		{
 			TrackInfo track{};
-			size_t trackNumStart = line.find("TRACK") + 6;
-			track.number = line.substr(trackNumStart, 2);
+			track.number = line.substr(commandStart + sizeof("TRACK"), 2);
 			track.filePath = filePath;
 			track.fileType = fileType;
 
@@ -98,17 +114,11 @@ CueFile parseCueFile(fs::path& inputFile)
 
 			cueFile.tracks.push_back(track);
 		}
-		else if (line.find("INDEX 01") != std::string::npos)
+		else if (commandStart = line.find("INDEX 01"); commandStart != std::string::npos)
 		{
-			size_t timeStart = line.find("INDEX 01") + 9;
-			std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-			int startSector = TimecodeToSectors(startTime);
-			if (startSector < 0)
-			{
-				printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
-				exit(EXIT_FAILURE);
-			}
+			int startSector = parseCueTime(line, commandStart + sizeof("INDEX 01"));
 
+			std::string startTime;
 			if (cueFile.multiBIN)
 			{
 				pregapSectors = startSector;
@@ -136,27 +146,13 @@ CueFile parseCueFile(fs::path& inputFile)
 		}
 		else if (!cueFile.multiBIN)
 		{
-			if (line.find("INDEX 00") != std::string::npos)
+			if (commandStart = line.find("INDEX 00"); commandStart != std::string::npos)
 			{
-				size_t timeStart = line.find("INDEX 00") + 9;
-				std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-				pregapStartSector = TimecodeToSectors(startTime);
-				if (pregapStartSector < 0)
-				{
-					printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
-					exit(EXIT_FAILURE);
-				}
+				pregapStartSector = parseCueTime(line, commandStart + sizeof("INDEX 00"));
 			}
-			else if (line.find("PREGAP") != std::string::npos)
+			else if (commandStart = line.find("PREGAP"); commandStart != std::string::npos)
 			{
-				size_t timeStart = line.find("PREGAP") + 7;
-				std::string pregapTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-				pregapSectors = TimecodeToSectors(pregapTime);
-				if (pregapSectors < 0)
-				{
-					printf("Error: Invalid cue file timecode \"%s\" on line %d\n", pregapTime.c_str(), lineNumber);
-					exit(EXIT_FAILURE);
-				}
+				pregapSectors = parseCueTime(line, commandStart + sizeof("PREGAP"));
 			}
 		}
 		// Silently skip unsupported commands.
@@ -167,9 +163,7 @@ CueFile parseCueFile(fs::path& inputFile)
 
 	if (!cueFile.tracks.empty())
 	{
-		TrackInfo &lastTrack = cueFile.tracks.back();
-		lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
-		lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+		finalizeTrack(cueFile.tracks.back());
 	}
 
 	return cueFile;
