@@ -20,7 +20,7 @@ CueFile parseCueFile(fs::path& inputFile)
 	unique_file file = OpenScopedFile(inputFile, "r");
 	fs::path filePath = inputFile;
 	int lineNumber = 1;
-	int pauseStartSector = 1;
+	int pregapStartSector = 1;
 	int previousStartSector = 0;
 
 	char buffer[1024];
@@ -95,23 +95,6 @@ CueFile parseCueFile(fs::path& inputFile)
 
 			cueFile.tracks.push_back(track);
 		}
-		else if (line.find("INDEX 00") != std::string::npos)
-		{
-			size_t timeStart = line.find("INDEX 00") + 9;
-			std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-			pauseStartSector = TimecodeToSectors(startTime);
-			if (pauseStartSector < 0)
-			{
-				printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
-				exit(EXIT_FAILURE);
-			}
-
-			if (pauseStartSector)
-			{
-				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pauseStartSector - previousStartSector;
-				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pauseStartSector;
-			}
-		}
 		else if (line.find("INDEX 01") != std::string::npos)
 		{
 			size_t timeStart = line.find("INDEX 01") + 9;
@@ -123,7 +106,7 @@ CueFile parseCueFile(fs::path& inputFile)
 				exit(EXIT_FAILURE);
 			}
 
-			if (!pauseStartSector)
+			if (cueFile.multiBIN)
 			{
 				startSector = cueFile.tracks[cueFile.tracks.size() - 2].endSector + startSector;
 				startTime = SectorsToTimecode(startSector);
@@ -132,6 +115,26 @@ CueFile parseCueFile(fs::path& inputFile)
 			cueFile.tracks.back().startTime = startTime;
 			cueFile.tracks.back().startSector = startSector;
 			previousStartSector = startSector;
+		}
+		else if (!cueFile.multiBIN)
+		{
+			if (line.find("INDEX 00") != std::string::npos)
+			{
+				size_t timeStart = line.find("INDEX 00") + 9;
+				std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
+				pregapStartSector = TimecodeToSectors(startTime);
+				if (pregapStartSector < 0)
+				{
+					printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
+					exit(EXIT_FAILURE);
+				}
+
+				if (pregapStartSector)
+				{
+					cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
+					cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
+				}
+			}
 		}
 		else
 		{
