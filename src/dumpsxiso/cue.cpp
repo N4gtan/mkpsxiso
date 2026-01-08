@@ -19,8 +19,10 @@ CueFile parseCueFile(fs::path& inputFile)
 	std::string fileType;
 	unique_file file = OpenScopedFile(inputFile, "r");
 	fs::path filePath = inputFile;
+	int fileSectors;
 	int lineNumber = 1;
-	int pregapStartSector = 1;
+	int pregapSectors = 150;
+	int pregapStartSector = 0;
 	int previousStartSector = 0;
 
 	char buffer[1024];
@@ -54,7 +56,8 @@ CueFile parseCueFile(fs::path& inputFile)
 					printf("Error: File size for \"%s\" is not a multiple of 2352\n", fileName.c_str());
 					exit(EXIT_FAILURE);
 				}
-				cueFile.totalSectors += fileSize / CD_SECTOR_SIZE;
+				fileSectors = static_cast<int>(fileSize / CD_SECTOR_SIZE);
+				cueFile.totalSectors += fileSectors;
 			}
 
 			if (line.find("BINARY") != std::string::npos)
@@ -108,8 +111,23 @@ CueFile parseCueFile(fs::path& inputFile)
 
 			if (cueFile.multiBIN)
 			{
-				startSector = cueFile.tracks[cueFile.tracks.size() - 2].endSector + startSector;
+				pregapSectors = startSector;
+				startSector = cueFile.totalSectors - fileSectors + pregapSectors;
+				pregapStartSector = startSector - pregapSectors;
 				startTime = SectorsToTimecode(startSector);
+				pregapSectors = 150;
+			}
+			else if (pregapStartSector <= 0)
+			{
+				pregapStartSector = startSector - pregapSectors;
+				pregapSectors = 150;
+			}
+
+			if (cueFile.tracks.size() > 1)
+			{
+				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
+				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
+				pregapStartSector = 0;
 			}
 
 			cueFile.tracks.back().startTime = startTime;
@@ -128,19 +146,21 @@ CueFile parseCueFile(fs::path& inputFile)
 					printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
 					exit(EXIT_FAILURE);
 				}
-
-				if (pregapStartSector)
+			}
+			else if (line.find("PREGAP") != std::string::npos)
+			{
+				size_t timeStart = line.find("PREGAP") + 7;
+				std::string pregapTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
+				pregapSectors = TimecodeToSectors(pregapTime);
+				if (pregapSectors < 0)
 				{
-					cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
-					cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
+					printf("Error: Invalid cue file timecode \"%s\" on line %d\n", pregapTime.c_str(), lineNumber);
+					exit(EXIT_FAILURE);
 				}
 			}
 		}
-		else
-		{
-			printf("Error: Unsupported cue file syntax on line %d\n", lineNumber);
-			exit(EXIT_FAILURE);
-		}
+		// Silently skip unsupported commands.
+		// TODO: Support indexes > 01 if a real-world PSX case appears.
 
 		lineNumber++;
 	}
