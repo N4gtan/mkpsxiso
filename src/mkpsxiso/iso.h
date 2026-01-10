@@ -115,7 +115,7 @@ namespace iso
 		 *	*srcfile	- Path and filename to the source file.
 		 *  attributes  - GMT offset/XA permissions for the file, if applicable.
 		 */
-		bool AddFileEntry(const char* id, EntryType type, const fs::path& srcfile, const EntryAttributes& attributes, const char *trackid = nullptr);
+		bool AddFileEntry(std::string id, EntryType type, fs::path srcfile, const EntryAttributes& attributes, const char *trackid = nullptr);
 
 		/** Adds an invisible dummy file entry to the directory record. Its invisible because its file entry
 		 *	is not actually added to the directory record.
@@ -145,7 +145,7 @@ namespace iso
 		 *
 		 *	Returns: Pointer to another DirTreeClass for accessing the directory record of the subdirectory.
 		 */
-		DirTreeClass* AddSubDirEntry(const char* id, const fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists);
+		DirTreeClass* AddSubDirEntry(std::string id, fs::path srcDir, const EntryAttributes& attributes, bool& alreadyExists);
 
 		/**	Writes the source files assigned to the directory entries to a CD image. Its recommended to execute
 		 *	this first before writing the actual file system.

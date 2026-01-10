@@ -105,7 +105,7 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	return entries.back();
 }
 
-bool iso::DirTreeClass::AddFileEntry(const char* id, EntryType type, const fs::path& srcfile, const EntryAttributes& attributes, const char *trackid)
+bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path srcfile, const EntryAttributes& attributes, const char *trackid)
 {
 	auto fileAttrib = Stat(srcfile);
     if ( !fileAttrib )
@@ -168,18 +168,9 @@ bool iso::DirTreeClass::AddFileEntry(const char* id, EntryType type, const fs::p
 				return false;
 			}
 		}
-
 	}
 
-
-	std::string temp_name = id;
-	for ( char& ch : temp_name )
-	{
-		ch = std::toupper( ch );
-	}
-
-	temp_name += ";1";
-
+	id += ";1";
 
 	// Check if file entry already exists
     for ( const auto& e : entriesInDir )
@@ -187,26 +178,24 @@ bool iso::DirTreeClass::AddFileEntry(const char* id, EntryType type, const fs::p
 		const DIRENTRY& entry = e.get();
 		if ( !entry.id.empty() )
 		{
-            if ( ( entry.type == EntryType::EntryFile )
-				&& ( CompareICase( entry.id, temp_name ) ) )
+            if ( ( entry.type != EntryType::EntryDir )
+				&& ( CompareICase( entry.id, id ) ) )
 			{
 				if (!global::QuietMode)
 				{
 					printf("      ");
 				}
 
-				printf("ERROR: Duplicate file entry: %s\n", id);
+				printf("ERROR: Duplicate file entry: %s\n", CleanIdentifier(id).c_str());
 
 				return false;
             }
-
 		}
-
     }
 
 	DIRENTRY entry {};
 
-	entry.id		= std::move(temp_name);
+	entry.id		= std::move(id);
 	entry.type		= type;
 	entry.subdir	= nullptr;
 	entry.HF		= attributes.HFLAG % 4;
@@ -216,23 +205,14 @@ bool iso::DirTreeClass::AddFileEntry(const char* id, EntryType type, const fs::p
 	entry.UID		= attributes.UID;
 	entry.order		= attributes.ORDER;
 	entry.flba		= attributes.FLBA;
-
-	if ( !srcfile.empty() )
-	{
-		entry.srcfile = srcfile;
-	}
+	entry.srcfile	= std::move(srcfile);
 
 	if ( type == EntryType::EntryDA )
 	{
-		entry.length = GetAudioSize( srcfile );
-		if(trackid == nullptr)
-		{
-			printf("ERROR: no trackid for DA track\n");
-			return false;
-		}
+		entry.length = GetAudioSize( entry.srcfile );
 		entry.trackid = trackid;
 	}
-	else if ( type != EntryType::EntryDir )
+	else
 	{
 		entry.length = fileAttrib->st_size;
 	}
@@ -262,7 +242,7 @@ void iso::DirTreeClass::AddDummyEntry(const unsigned int sectors, const unsigned
 	entriesInDir.emplace_back(entries.back());
 }
 
-iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(const char* id, const fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists)
+iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, fs::path srcDir, const EntryAttributes& attributes, bool& alreadyExists)
 {
 	// Duplicate directory entries are allowed, but the subsequent occurences will not add
 	// a new directory to 'entries'.
@@ -283,28 +263,20 @@ iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(const char* id, const fs::p
 	{
 		fileAttrib.emplace().st_mtime = global::BuildTime;
 	
-		if ( id != nullptr && !global::noWarns )
+		if ( !global::noWarns )
 		{
 			if ( !global::QuietMode )
 			{
 				printf( "\n    " );
 			}
 
-			printf( "WARNING: 'source' attribute for subdirectory '%s' is invalid or empty.\n", id );
+			printf( "WARNING: 'source' attribute for subdirectory '%s' is invalid or empty.\n", id.c_str() );
 		}
 	}
 
 	DIRENTRY entry {};
 
-	if (id != nullptr)
-	{
-		entry.id = id;
-		for ( char& ch : entry.id )
-		{
-			ch = toupper( ch );
-		}
-	}
-
+	entry.id		= std::move(id);
 	entry.type		= EntryType::EntryDir;
 	entry.subdir	= std::make_unique<DirTreeClass>(entries, this);
 	entry.HF		= attributes.HFLAG % 4;

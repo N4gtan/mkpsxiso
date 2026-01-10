@@ -373,7 +373,7 @@ int Main(int argc, char* argv[])
 		// Check if image_name attribute is specified
 		if ( global::ImageName.empty() )
 		{
-			if ( const char* image_name = projectElement->Attribute(xml::attrib::IMAGE_NAME); image_name != nullptr )
+			if ( const char* image_name = projectElement->Attribute(xml::attrib::IMAGE_NAME); image_name != nullptr && *image_name != 0 )
 			{
 				global::ImageName = image_name;
 			}
@@ -573,7 +573,7 @@ int Main(int argc, char* argv[])
 				}
 
 				// Write track information to the CUE sheet
-				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr )
+				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr || *trackRelativeSource == 0 )
 				{
 					if ( !global::QuietMode )
 					{
@@ -1111,21 +1111,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	if ( licenseElement != nullptr )
 	{
-		if ( const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE); license_file_attrib != nullptr )
+		if ( const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE); license_file_attrib != nullptr && *license_file_attrib != 0 )
 		{
-			const fs::path license_file = xmlPath / license_file_attrib;
-			if ( license_file.empty() )
-			{
-				if ( !global::QuietMode )
-				{
-					printf( "    " );
-				}
-
-				printf("ERROR: File attribute of <license> element is missing "
-					"or blank on line %d\n.", licenseElement->GetLineNum() );
-
-				return false;
-			}
+			const fs::path license_file = (xmlPath / license_file_attrib).lexically_normal();
 
 			if ( !global::QuietMode )
 			{
@@ -1166,8 +1154,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 				printf( "    " );
 			}
 
-			printf( "ERROR: <license> element has no file attribute on line %d.\n",
-				licenseElement->GetLineNum() );
+			printf( "ERROR: File attribute of <license> element is missing "
+				"or blank on line %d.\n", licenseElement->GetLineNum() );
 
 			return false;
 		}
@@ -1263,7 +1251,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
 	const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE);
 
-	if ( nameElement == nullptr && sourceElement == nullptr )
+	if ( (nameElement == nullptr || *nameElement == 0) && (sourceElement == nullptr || *sourceElement == 0) )
 	{
 		if ( !global::QuietMode )
 		{
@@ -1277,40 +1265,53 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	}
 
 	fs::path srcFile;
-	if ( sourceElement != nullptr )
-	{
-		srcFile = sourceElement;
-	}
-
 	std::string name;
-	if ( nameElement != nullptr )
+	if ( sourceElement != nullptr && *sourceElement != 0 )
 	{
-		name = nameElement;
+		srcFile = (xmlPath / sourceElement).lexically_normal();
+
+		if ( nameElement != nullptr && *nameElement != 0 )
+		{
+			name = nameElement;
+		}
+		else
+		{
+			name = srcFile.filename().string();
+		}
 	}
 	else
 	{
-		name = srcFile.filename().string();
+		name = nameElement;
+		srcFile = xmlPath / name;
 	}
 
-	if ( srcFile.empty() )
-	{
-		srcFile = name;
-	}
-
-	if ( name.find_first_of( "\\/" ) != std::string::npos )
-	{
-		if ( !global::QuietMode )
+	{ // ECMA-119 7.5.1 - File Identifier shall contain one dot and uppercase alphanumeric characters or underscores.
+		int dots = 0;
+    	for (char &ch : name)
 		{
-			printf("      ");
+			if (ch == '.')
+			{
+				if (++dots > 1)
+				{
+					printf("ERROR: File name '%s' on line %d shall contain only one dot.\n", name.c_str(), dirElement->GetLineNum());
+					return false;
+				}
+			}
+        	else if (isalnum((unsigned char)ch))
+			{
+				ch = std::toupper((unsigned char)ch);
+			}
+			else if (ch != '_')
+			{
+				printf("ERROR: File name '%s' on line %d contains an invalid character '%c'.\n", name.c_str(), dirElement->GetLineNum(), ch);
+				return false;
+			}
 		}
-
-		printf( "ERROR: Name attribute for file entry '%s' cannot be "
-			"a path on line %d.\n", name.c_str(),
-			dirElement->GetLineNum() );
-
-		return false;
+		if (dots == 0)
+			name += '.';
 	}
 
+	// ECMA-119 7.5.1 and 10.1 - File Identifier shall be 1-30 characters long plus one dot.
 	if ( name.size() > 12 )
 	{
 		if ( name.size() > 31 )
@@ -1328,9 +1329,8 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			printf( "WARNING: File name '%s' on line %d is more than 12 "
 				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 		}
-	}
 
-	{ // ECMA-119 6.8.2.1 - The path length of any file shall not exceed 255.
+		// ECMA-119 6.8.2.1 - The path length of any file shall not exceed 255.
 		size_t pathLength = (name + ";1").length();
 		int depth = dirTree->GetPathDepth(&pathLength);
 		if (pathLength + depth > 255)
@@ -1368,9 +1368,9 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 				return false;
 			}
 			trackid = dirElement->Attribute(xml::attrib::TRACK_ID);
-			if ( trackid == nullptr )
+			if ( trackid == nullptr || *trackid == 0 )
 			{
-				printf( "ERROR: DA audio file(s) does not have an associated CDDA track [trackid]\n" );
+				printf( "ERROR: DA audio file '%s' on line %d does not have an associated CDDA trackid.\n", name.c_str(), dirElement->GetLineNum() );
 				return false;
 			}
 			// locate the node containing the tracks
@@ -1404,12 +1404,12 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			}
 			// set the src file to the trackid source
 			sourceElement = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
-			if(sourceElement == nullptr)
+			if(sourceElement == nullptr || *sourceElement == 0)
 			{
 				printf( "ERROR: <%s %s=\"audio\" %s=\"%s\"> must have source\n", xml::elem::TRACK, xml::attrib::TRACK_TYPE, xml::attrib::TRACK_ID, trackid);
 				return false;
 			}
-			srcFile = sourceElement;
+			srcFile = (xmlPath / sourceElement).lexically_normal();
 		}
 		else
 		{
@@ -1426,7 +1426,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 	}
 
-	return dirTree->AddFileEntry(name.c_str(), entry, xmlPath / srcFile, ReadEntryAttributes(defaultAttributes, dirElement), trackid);
+	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid);
 }
 
 static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
@@ -1443,13 +1443,34 @@ static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLEleme
 
 static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
 {
-	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
-	if ( strlen( nameElement ) > 12 )
+	fs::path srcDir;
+	std::string name;
+	if (const char *sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE); sourceElement != nullptr && *sourceElement != 0)
 	{
-		if ( strlen( nameElement ) > 31 )
+		srcDir = (xmlPath / sourceElement).lexically_normal();
+	}
+
+	if (const char *nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME); nameElement != nullptr && *nameElement != 0)
+	{
+		name = nameElement;
+	}
+	else if (!srcDir.empty())
+	{
+		name = srcDir.filename().string();
+	}
+	else
+	{
+		printf("ERROR: Directory name missing on line %d.\n", dirElement->GetLineNum());
+		return false;
+	}
+
+	// ECMA-119 7.6.3 and 10.1 - Directory Identifier shall be 1-31 characters long.
+	if ( name.length() > 8 )
+	{
+		if ( name.length() > 31 )
 		{
 			printf( "ERROR: Directory name '%s' on line %d is more than 31 "
-				"characters long.\n", nameElement, dirElement->GetLineNum() );
+				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 			return false;
 		}
 		if ( !global::noWarns )
@@ -1458,15 +1479,9 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 			{
 				printf("      ");
 			}
-			printf( "WARNING: Directory name '%s' on line %d is more than 12 "
-				"characters long.\n", nameElement, dirElement->GetLineNum() );
+			printf( "WARNING: Directory name '%s' on line %d is more than 8 "
+				"characters long.\n", name.c_str(), dirElement->GetLineNum() );
 		}
-	}
-
-	fs::path srcDir;
-	if (const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE); sourceElement != nullptr)
-	{
-		srcDir = xmlPath / sourceElement;
 	}
 
 	{ // ECMA-119 6.8.2.1 - The number of levels in the hierarchy shall not exceed eight.
@@ -1478,9 +1493,24 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 		}
 	}
 
+	// ECMA-119 7.6.1 - Directory Identifier shall contain uppercase alphanumeric characters or underscores.
+    for (char &ch : name)
+	{
+		if (isalnum((unsigned char)ch))
+		{
+			ch = std::toupper((unsigned char)ch);
+		}
+		else if (ch != '_')
+		{
+			printf("ERROR: Directory name '%s' on line %d contains an invalid character '%c'.\n",
+				name.c_str(), dirElement->GetLineNum(), ch);
+			return false;
+		}
+	}
+
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		nameElement, srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		std::move(name), std::move(srcDir), ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
 
 	if ( subdir == nullptr )
 	{
