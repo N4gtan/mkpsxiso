@@ -46,10 +46,10 @@ CueFile parseCueFile(fs::path& inputFile)
 	char buffer[1024];
 	while (std::fgets(buffer, sizeof(buffer), file.get()) != nullptr)
 	{
-		size_t commandStart;
+		size_t commandPos;
 		std::string_view line(buffer);
 
-		if (commandStart = line.find("FILE"); commandStart != std::string::npos)
+		if (commandPos = line.find("FILE"); commandPos != std::string::npos)
 		{
 			if (!cueFile.tracks.empty())
 			{
@@ -92,10 +92,10 @@ CueFile parseCueFile(fs::path& inputFile)
 				inputFile = filePath;
 			}
 		}
-		else if (commandStart = line.find("TRACK"); commandStart != std::string::npos)
+		else if (commandPos = line.find("TRACK"); commandPos != std::string::npos)
 		{
 			TrackInfo track{};
-			track.number = line.substr(commandStart + sizeof("TRACK"), 2);
+			track.number = line.substr(commandPos + sizeof("TRACK"), 2);
 			track.filePath = filePath;
 			track.fileType = fileType;
 
@@ -114,9 +114,9 @@ CueFile parseCueFile(fs::path& inputFile)
 
 			cueFile.tracks.push_back(track);
 		}
-		else if (commandStart = line.find("INDEX 01"); commandStart != std::string::npos)
+		else if (commandPos = line.find("INDEX 01"); commandPos != std::string::npos)
 		{
-			int startSector = parseCueTime(line, commandStart + sizeof("INDEX 01"));
+			int startSector = parseCueTime(line, commandPos + sizeof("INDEX 01"));
 
 			std::string startTime;
 			if (cueFile.multiBIN)
@@ -125,19 +125,19 @@ CueFile parseCueFile(fs::path& inputFile)
 				startSector = cueFile.totalSectors - fileSectors + pregapSectors;
 				pregapStartSector = startSector - pregapSectors;
 				startTime = SectorsToTimecode(startSector);
-				pregapSectors = 150;
+				pregapSectors = 150; // Reset
 			}
 			else if (pregapStartSector <= 0)
 			{
 				pregapStartSector = startSector - pregapSectors;
-				pregapSectors = 150;
+				pregapSectors = 150; // Reset
 			}
 
 			if (cueFile.tracks.size() > 1)
 			{
 				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
 				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
-				pregapStartSector = 0;
+				pregapStartSector = 0; // Reset
 			}
 
 			cueFile.tracks.back().startTime = startTime;
@@ -146,13 +146,13 @@ CueFile parseCueFile(fs::path& inputFile)
 		}
 		else if (!cueFile.multiBIN)
 		{
-			if (commandStart = line.find("INDEX 00"); commandStart != std::string::npos)
+			if (commandPos = line.find("INDEX 00"); commandPos != std::string::npos)
 			{
-				pregapStartSector = parseCueTime(line, commandStart + sizeof("INDEX 00"));
+				pregapStartSector = parseCueTime(line, commandPos + sizeof("INDEX 00"));
 			}
-			else if (commandStart = line.find("PREGAP"); commandStart != std::string::npos)
+			else if (commandPos = line.find("PREGAP"); commandPos != std::string::npos)
 			{
-				pregapSectors = parseCueTime(line, commandStart + sizeof("PREGAP"));
+				pregapSectors = parseCueTime(line, commandPos + sizeof("PREGAP"));
 			}
 		}
 		// Silently skip unsupported commands.
