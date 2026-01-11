@@ -208,7 +208,7 @@ namespace cd {
 
 	// License data (just a sequence of 28032 bytes)
 	typedef struct {
-		char data[28032];
+		unsigned char data[28032];
 	} ISO_LICENSE;
 
 	// RIFF+WAVE header

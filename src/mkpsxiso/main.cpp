@@ -25,6 +25,7 @@ namespace global
 	fs::path LBAfile;
 	fs::path LBAheaderFile;
 	fs::path ImageName;
+	fs::path LicenseFile;
 	fs::path RebuildXMLScript;
 
 	tinyxml2::XMLDocument xmlIdFile;
@@ -70,6 +71,7 @@ int Main(int argc, char* argv[])
 		"  -l|--label\t\tSpecify volume ID (overrides volume element)\n"
 		"  -o|--output <file>\tSpecify output file (overrides image_name attribute)\n"
 		"  -c|--cuefile <file>\tSpecify cue sheet file (overrides cue_sheet attribute)\n"
+		"  -L|--license <file>\tSpecify license file (overrides file attribute)\n"
 		"  -y\t\t\tAlways overwrite ISO image files\n"
 		"  -lba <file>\t\tGenerate a log of file LBA locations in disc image\n"
 		"  -lbahead <file>\tGenerate a C header of file LBA locations in disc image\n"
@@ -161,6 +163,12 @@ int Main(int argc, char* argv[])
 			if (auto output = ParsePathArgument(args, "c", "cuefile"); output.has_value())
 			{
 				global::cuefile = output->lexically_normal();
+				OutputOverride = true;
+				continue;
+			}
+			if (auto output = ParsePathArgument(args, "L", "license"); output.has_value())
+			{
+				global::LicenseFile = output->lexically_normal();
 				OutputOverride = true;
 				continue;
 			}
@@ -365,7 +373,7 @@ int Main(int argc, char* argv[])
 		imagesCount++;
 		if ( imagesCount > 1 && OutputOverride )
 		{
-			printf( "ERROR: -o or -c switch cannot be used in multi-disc ISO "
+			printf( "ERROR: -o/-c/-L switches cannot be used in a multi-disc ISO "
 				"project.\n" );
 			return EXIT_FAILURE;
 		}
@@ -846,10 +854,9 @@ int Main(int argc, char* argv[])
 						
 
 			// Write license data
-			const tinyxml2::XMLElement* licenseElement = dataTrack->FirstChildElement(xml::elem::LICENSE);
-			if ( licenseElement != nullptr )
+			if ( !global::LicenseFile.empty() )
 			{
-				FILE* fp = OpenFile( global::XMLscript.parent_path() / licenseElement->Attribute(xml::attrib::LICENSE_FILE), "rb" );
+				FILE* fp = OpenFile( global::LicenseFile, "rb" );
 				if (fp != nullptr)
 				{
 					auto license = std::make_unique<cd::ISO_LICENSE>();
@@ -953,8 +960,6 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 {
 	const tinyxml2::XMLElement* identifierElement =
 		trackElement->FirstChildElement(xml::elem::IDENTIFIERS);
-	const tinyxml2::XMLElement* licenseElement =
-		trackElement->FirstChildElement(xml::elem::LICENSE);
 
 	// Set file system identifiers
 
@@ -1109,58 +1114,57 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		}
 	}
 
-	if ( licenseElement != nullptr )
+	// Check for license file
+	bool gotLicFromXML = false;
+	const tinyxml2::XMLElement* licenseElement = trackElement->FirstChildElement(xml::elem::LICENSE);
+	if ( global::LicenseFile.empty() && licenseElement != nullptr )
 	{
-		if ( const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE); license_file_attrib != nullptr && *license_file_attrib != 0 )
+		const char* license_file_attrib = licenseElement->Attribute(xml::attrib::LICENSE_FILE);
+
+		if ( license_file_attrib == nullptr || *license_file_attrib == 0 )
 		{
-			const fs::path license_file = (xmlPath / license_file_attrib).lexically_normal();
-
-			if ( !global::QuietMode )
-			{
-				printf( "    License file: \"%s\"\n\n", license_file.string().c_str() );
-			}
-
-			int64_t licenseSize = GetSize( license_file );
-
-			if ( licenseSize < 0 )
-			{
-				if ( !global::QuietMode )
-				{
-					printf( "    " );
-				}
-
-				printf( "ERROR: Specified license file not found on line %d.\n",
-					licenseElement->GetLineNum() );
-
-				return false;
-
-            }
-			else if ( licenseSize != sizeof(cd::ISO_LICENSE) && !global::noWarns )
-			{
-            	if ( !global::QuietMode )
-				{
-					printf("    ");
-				}
-				printf( "WARNING: Specified license file may not be of "
-					"correct format.\n" );
-            }
-
-
-		}
-		else
-		{
-			if ( !global::QuietMode )
-			{
-				printf( "    " );
-			}
-
 			printf( "ERROR: File attribute of <license> element is missing "
 				"or blank on line %d.\n", licenseElement->GetLineNum() );
+			return false;
+		}
+
+		global::LicenseFile = (xmlPath / license_file_attrib).lexically_normal();
+		gotLicFromXML = true;
+	}
+
+	// If still empty, blank sectors will be written.
+	if ( !global::LicenseFile.empty() )
+	{
+		if ( !global::QuietMode )
+		{
+			printf( "    License file: \"%s\"\n\n", global::LicenseFile.string().c_str() );
+		}
+
+		int64_t licenseSize = GetSize( global::LicenseFile );
+
+		if ( licenseSize < 0 )
+		{
+			printf( "ERROR: Specified license file " );
+
+			if ( gotLicFromXML )
+			{
+				printf( "(on line %d) ", licenseElement->GetLineNum() );
+			}
+
+			printf( "not found.\n" );
 
 			return false;
 		}
 
-
+		if ( licenseSize != sizeof(cd::ISO_LICENSE) && !global::noWarns )
+		{
+			if ( !global::QuietMode )
+			{
+				printf("    ");
+			}
+			printf( "WARNING: Specified license file may not be of "
+				"correct format.\n" );
+		}
 	}
 
 	// Establish the volume timestamp to either the current local time or isoIdentifiers.CreationDate (if specified)
