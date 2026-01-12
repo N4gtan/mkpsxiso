@@ -92,10 +92,10 @@ int64_t GetSize(const fs::path& path)
 }
 
 // Returns local UTC `struct tm` from UTC+0 `time_t`
-struct tm CustomLocalTime(const time_t* timeSec)
+struct tm* CustomLocalTime(const time_t* timeSec)
 { // Windows localtime() can't handle timestamps prior to 1970
 #ifdef _WIN32
-	tm timeBuf {};
+	static tm timeBuf {};
 	SYSTEMTIME localST {};
 	FILETIME localFT = TimetToFileTime(*timeSec - SYSTEM_TIMEZONE);
 	FileTimeToSystemTime(&localFT, &localST);
@@ -107,9 +107,9 @@ struct tm CustomLocalTime(const time_t* timeSec)
 	timeBuf.tm_min  = localST.wMinute;
 	timeBuf.tm_sec  = localST.wSecond;
 
-	return timeBuf;
+	return &timeBuf;
 #else
-	return *localtime(timeSec);
+	return localtime(timeSec);
 #endif
 }
 

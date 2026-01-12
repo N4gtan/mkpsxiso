@@ -23,4 +23,4 @@ std::optional<struct stat64> Stat(const fs::path& path);
 int64_t GetSize(const fs::path& path);
 void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate);
 time_t CustomMkTime(struct tm* timeBuf);
-struct tm CustomLocalTime(const time_t* timeSec);
+struct tm* CustomLocalTime(const time_t* timeSec);

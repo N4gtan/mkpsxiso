@@ -24,7 +24,7 @@ static const int RoundToEven(const int val)
 
 static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
 {
-	tm timestamp;
+	tm* timestamp;
 	if (global::new_type.has_value()) {
 		timestamp = CustomLocalTime(&time);
 	}
@@ -32,17 +32,19 @@ static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
 		// GMToffs is specified in 15 minute units
 		const time_t GMToffsSeconds = static_cast<time_t>(15) * 60 * GMToffs;
 		time += GMToffsSeconds;
-		timestamp = *gmtime( &time );
+		timestamp = gmtime( &time );
 	}
 
-	cd::ISO_DATESTAMP result;
-	result.hour		= timestamp.tm_hour;
-	result.minute	= timestamp.tm_min;
-	result.second	= timestamp.tm_sec;
-	result.month	= timestamp.tm_mon+1;
-	result.day		= timestamp.tm_mday;
-	result.year		= timestamp.tm_year;
-	result.GMToffs	= GMToffs;
+	cd::ISO_DATESTAMP result{.month = 1, .day = 1, .GMToffs = GMToffs};
+	if (timestamp != nullptr)
+	{
+		result.year		= timestamp->tm_year;
+		result.month	= timestamp->tm_mon + 1;
+		result.day		= timestamp->tm_mday;
+		result.hour		= timestamp->tm_hour;
+		result.minute	= timestamp->tm_min;
+		result.second	= timestamp->tm_sec;
+	}
 
 	return result;
 }
