@@ -1098,6 +1098,13 @@ void ParseISO(cd::IsoReader& reader) {
         return;
     }
 
+	if (pathTable.pathTableList[0].entry.dirOffs != descriptor.rootDirRecord.entryOffs.lsb)
+	{
+		printf("\nERROR: Root directory offset in path table does not match the one in volume descriptor.\n"
+				 "       The ISO image may be corrupted or invalid.\n");
+		exit(EXIT_FAILURE);
+	}
+
 	// Prepare output directories
 	for(size_t i=0; i<numEntries; i++)
 	{

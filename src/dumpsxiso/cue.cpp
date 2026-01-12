@@ -19,22 +19,41 @@ CueFile parseCueFile(fs::path& inputFile)
 	std::string fileType;
 	unique_file file = OpenScopedFile(inputFile, "r");
 	fs::path filePath = inputFile;
+	int fileSectors;
 	int lineNumber = 1;
-	int pauseStartSector = 1;
+	int pregapSectors = 150;
+	int pregapStartSector = 0;
 	int previousStartSector = 0;
+
+	auto finalizeTrack = [&cueFile](TrackInfo &lastTrack) -> void
+	{
+		lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
+		lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+	};
+	
+	auto parseCueTime = [lineNumber](std::string_view line, const size_t offset) -> int
+	{
+		std::string timecode(line.substr(offset, line.find_first_of("\r\n") - offset));
+		int sectors = TimecodeToSectors(timecode);
+		if (sectors < 0)
+		{
+			printf("Error: Invalid cue file timecode \"%s\" on line %d\n", timecode.c_str(), lineNumber);
+			exit(EXIT_FAILURE);
+		}
+		return sectors;
+	};
 
 	char buffer[1024];
 	while (std::fgets(buffer, sizeof(buffer), file.get()) != nullptr)
 	{
+		size_t commandPos;
 		std::string_view line(buffer);
-		if (line.find("FILE") != std::string::npos)
-		{
 
+		if (commandPos = line.find("FILE"); commandPos != std::string::npos)
+		{
 			if (!cueFile.tracks.empty())
 			{
-				TrackInfo &lastTrack = cueFile.tracks.back();
-				lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
-				lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+				finalizeTrack(cueFile.tracks.back());
 				cueFile.multiBIN = true;
 			}
 
@@ -54,7 +73,8 @@ CueFile parseCueFile(fs::path& inputFile)
 					printf("Error: File size for \"%s\" is not a multiple of 2352\n", fileName.c_str());
 					exit(EXIT_FAILURE);
 				}
-				cueFile.totalSectors += fileSize / CD_SECTOR_SIZE;
+				fileSectors = static_cast<int>(fileSize / CD_SECTOR_SIZE);
+				cueFile.totalSectors += fileSectors;
 			}
 
 			if (line.find("BINARY") != std::string::npos)
@@ -72,11 +92,10 @@ CueFile parseCueFile(fs::path& inputFile)
 				inputFile = filePath;
 			}
 		}
-		else if (line.find("TRACK") != std::string::npos)
+		else if (commandPos = line.find("TRACK"); commandPos != std::string::npos)
 		{
 			TrackInfo track{};
-			size_t trackNumStart = line.find("TRACK") + 6;
-			track.number = line.substr(trackNumStart, 2);
+			track.number = line.substr(commandPos + sizeof("TRACK"), 2);
 			track.filePath = filePath;
 			track.fileType = fileType;
 
@@ -95,58 +114,56 @@ CueFile parseCueFile(fs::path& inputFile)
 
 			cueFile.tracks.push_back(track);
 		}
-		else if (line.find("INDEX 00") != std::string::npos)
+		else if (commandPos = line.find("INDEX 01"); commandPos != std::string::npos)
 		{
-			size_t timeStart = line.find("INDEX 00") + 9;
-			std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-			pauseStartSector = TimecodeToSectors(startTime);
-			if (pauseStartSector < 0)
-			{
-				printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
-				exit(EXIT_FAILURE);
-			}
+			int startSector = parseCueTime(line, commandPos + sizeof("INDEX 01"));
 
-			if (pauseStartSector)
+			std::string startTime;
+			if (cueFile.multiBIN)
 			{
-				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pauseStartSector - previousStartSector;
-				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pauseStartSector;
-			}
-		}
-		else if (line.find("INDEX 01") != std::string::npos)
-		{
-			size_t timeStart = line.find("INDEX 01") + 9;
-			std::string startTime(line.substr(timeStart, line.find_first_of("\r\n") - timeStart));
-			int startSector = TimecodeToSectors(startTime);
-			if (startSector < 0)
-			{
-				printf("Error: Invalid cue file timecode \"%s\" on line %d\n", startTime.c_str(), lineNumber);
-				exit(EXIT_FAILURE);
-			}
-
-			if (!pauseStartSector)
-			{
-				startSector = cueFile.tracks[cueFile.tracks.size() - 2].endSector + startSector;
+				pregapSectors = startSector;
+				startSector = cueFile.totalSectors - fileSectors + pregapSectors;
+				pregapStartSector = startSector - pregapSectors;
 				startTime = SectorsToTimecode(startSector);
+				pregapSectors = 150; // Reset
+			}
+			else if (pregapStartSector <= 0)
+			{
+				pregapStartSector = startSector - pregapSectors;
+				pregapSectors = 150; // Reset
+			}
+
+			if (cueFile.tracks.size() > 1)
+			{
+				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
+				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
+				pregapStartSector = 0; // Reset
 			}
 
 			cueFile.tracks.back().startTime = startTime;
 			cueFile.tracks.back().startSector = startSector;
 			previousStartSector = startSector;
 		}
-		else
+		else if (!cueFile.multiBIN)
 		{
-			printf("Error: Unsupported cue file syntax on line %d\n", lineNumber);
-			exit(EXIT_FAILURE);
+			if (commandPos = line.find("INDEX 00"); commandPos != std::string::npos)
+			{
+				pregapStartSector = parseCueTime(line, commandPos + sizeof("INDEX 00"));
+			}
+			else if (commandPos = line.find("PREGAP"); commandPos != std::string::npos)
+			{
+				pregapSectors = parseCueTime(line, commandPos + sizeof("PREGAP"));
+			}
 		}
+		// Silently skip unsupported commands.
+		// TODO: Support indexes > 01 if a real-world PSX case appears.
 
 		lineNumber++;
 	}
 
 	if (!cueFile.tracks.empty())
 	{
-		TrackInfo &lastTrack = cueFile.tracks.back();
-		lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
-		lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+		finalizeTrack(cueFile.tracks.back());
 	}
 
 	return cueFile;
