@@ -284,6 +284,11 @@ int Main(int argc, char* argv[])
 		{
 			tinyxml2::XMLElement *scanElm = toscan.front();
 			toscan.pop();
+			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr && scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+			{
+				scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
+				scanElm->DeleteAttribute("srcdir");
+			}
 			if(CompareICase(scanElm->Name(), xml::elem::FILE))
 			{
 				if(scanElm->Attribute(xml::attrib::ENTRY_TYPE, "da"))
