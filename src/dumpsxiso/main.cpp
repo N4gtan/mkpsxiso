@@ -897,19 +897,26 @@ tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry, tinyx
 {
 	tinyxml2::XMLElement* newelement;
 
-	const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
 	if (entry.type == EntryType::EntryDir)
 	{
 		if (!entry.identifier.empty())
 		{
 			newelement = dirElement->InsertNewChildElement("dir");
 			newelement->SetAttribute(xml::attrib::ENTRY_NAME, entry.identifier.c_str());
-			newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+			if (param::lba)
+			{
+				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+			}
 		}
 		else
 		{
 			// Root directory
 			newelement = dirElement->InsertNewChildElement(xml::elem::DIRECTORY_TREE);
+			if (!param::lba)
+			{
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, sourcePath.generic_string().c_str());
+			}
 		}
 
 		dirElement = newelement;
@@ -924,7 +931,11 @@ tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry, tinyx
 		newelement->SetAttribute(xml::attrib::ENTRY_NAME, CleanIdentifier(entry.identifier).c_str());
 		if(entry.type != EntryType::EntryDA)
 		{
-			newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+			if (param::lba)
+			{
+				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+			}
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");	
 		}
 		else
@@ -1349,7 +1360,7 @@ int Main(int argc, char *argv[])
 		"  -pt|--path-table\tGo through every known directory in order; helps on soft obfuscated games (like DMW3)\n"
 		"  -f|--force\t\tScans all unknown sectors for files; helps on heavy obfuscated games (like Xenogears)\n"
 		"  -e|--encode <codec>\tCodec to encode CDDA/DA audio; supports " SUPPORTED_CODEC_TEXT " (defaults to wave)\n"
-		"  -l|--lba\t\tWrites all lba offsets in the xml to force them at build time\n"
+		"  -l|--lba\t\tWrites all source paths and LBA offsets in the XML to force them at build time\n"
 		"  -n|--noxml\t\tDo not generate an XML file and license file\n"
 		"  -r|--raw\t\tDumps all files in raw format (forces --noxml option)\n"
 		"  -S|--sort-by-dir\tOutputs a \"pretty\" XML script where entries are grouped in directories\n"
