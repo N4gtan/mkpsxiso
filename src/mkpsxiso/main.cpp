@@ -581,7 +581,8 @@ int Main(int argc, char* argv[])
 				}
 
 				// Write track information to the CUE sheet
-				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr || *trackRelativeSource == 0 )
+				const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
+				if ( trackRelativeSource == nullptr || *trackRelativeSource == 0 )
 				{
 					if ( !global::QuietMode )
 					{
@@ -593,8 +594,7 @@ int Main(int argc, char* argv[])
 
 					return EXIT_FAILURE;
 				}
-				else
-				{
+
 					fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
 					if ( cuefp )
 					{
@@ -665,7 +665,6 @@ int Main(int argc, char* argv[])
 					}
 
 					totalLenLBA += audioSize/CD_SECTOR_SIZE;
-				}
 
 				if ( !global::QuietMode )
 				{
