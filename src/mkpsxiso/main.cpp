@@ -595,76 +595,76 @@ int Main(int argc, char* argv[])
 					return EXIT_FAILURE;
 				}
 
-					fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
-					if ( cuefp )
-					{
-						fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
-					}
+				fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
+				if ( cuefp )
+				{
+					fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
+				}
 
-					// pregap
-					int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
-					const tinyxml2::XMLElement *pregapElement = trackElement->FirstChildElement(xml::elem::TRACK_PREGAP);
-					if(pregapElement != nullptr)
+				// pregap
+				int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
+				const tinyxml2::XMLElement *pregapElement = trackElement->FirstChildElement(xml::elem::TRACK_PREGAP);
+				if(pregapElement != nullptr)
+				{
+					const char *duration = pregapElement->Attribute(xml::attrib::PREGAP_DURATION);
+					if(duration != nullptr)
 					{
-						const char *duration = pregapElement->Attribute(xml::attrib::PREGAP_DURATION);
-						if(duration != nullptr)
+						pregapSectors = TimecodeToSectors(duration);
+						if(pregapSectors < 0)
 						{
-							pregapSectors = TimecodeToSectors(duration);
-							if(pregapSectors < 0)
-							{
-								printf( "ERROR: %s duration has invalid MM:SS:FF "
-									"for track on line %d.\n", xml::elem::TRACK_PREGAP, pregapElement->GetLineNum() );
-								return EXIT_FAILURE;
-							}
-
-							if(pregapSectors > (80 * 60 * 75) && !global::noWarns)
-							{
-								printf( "WARNING: Duration > 80 minutes\n");
-							}
-						}
-					}
-					if(pregapSectors > 0)
-					{
-						if ( cuefp )
-						{
-							fprintf( cuefp.get(), "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str());
-						}
-
-						audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
-						totalLenLBA += pregapSectors;
-					}
-
-					if ( cuefp )
-					{
-						fprintf( cuefp.get(), "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str());
-					}
-
-					const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
-					audioTracks.emplace_back(totalLenLBA, audioSize, trackSource.string());
-
-					const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
-					if(trackid != nullptr)
-					{
-						if(!UpdateDAFilesWithLBA(entries, trackid, totalLenLBA))
-						{
+							printf( "ERROR: %s duration has invalid MM:SS:FF "
+								"for track on line %d.\n", xml::elem::TRACK_PREGAP, pregapElement->GetLineNum() );
 							return EXIT_FAILURE;
 						}
-					}
-					else
-					{
-						auto& entry = unrefTracks.emplace_back();
-						entry.id = trackSource.stem().string() + ";1";
-						entry.length = audioSize;
-						entry.lba = totalLenLBA;
-						entry.srcfile = trackSource;
-						entry.type = EntryType::EntryDA;
-						if (!global::QuietMode)
+
+						if(pregapSectors > (80 * 60 * 75) && !global::noWarns)
 						{
-							printf("    DA File \"%s\"\n", trackSource.filename().string().c_str());
+							printf( "WARNING: Duration > 80 minutes\n");
 						}
 					}
+				}
+				if(pregapSectors > 0)
+				{
+					if ( cuefp )
+					{
+						fprintf( cuefp.get(), "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str());
+					}
 
-					totalLenLBA += audioSize/CD_SECTOR_SIZE;
+					audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
+					totalLenLBA += pregapSectors;
+				}
+
+				if ( cuefp )
+				{
+					fprintf( cuefp.get(), "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str());
+				}
+
+				const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
+				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource.string());
+
+				const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
+				if(trackid != nullptr)
+				{
+					if(!UpdateDAFilesWithLBA(entries, trackid, totalLenLBA))
+					{
+						return EXIT_FAILURE;
+					}
+				}
+				else
+				{
+					auto& entry = unrefTracks.emplace_back();
+					entry.id = trackSource.stem().string() + ";1";
+					entry.length = audioSize;
+					entry.lba = totalLenLBA;
+					entry.srcfile = trackSource;
+					entry.type = EntryType::EntryDA;
+					if (!global::QuietMode)
+					{
+						printf("    DA File \"%s\"\n", trackSource.filename().string().c_str());
+					}
+				}
+
+				totalLenLBA += audioSize/CD_SECTOR_SIZE;
 
 				if ( !global::QuietMode )
 				{
