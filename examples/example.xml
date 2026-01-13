@@ -104,9 +104,9 @@
 							  This setting doesn't modify the LBA and is per directory. If order is not specified, defaults to '0'.
 							  So, files/folders with order < 0 will be before the unordered ones and after them the ones with order > 0.
 				
-				Note: Either name or source attribute can be omitted. If only name is specified, it uses that as the
-				name of the source file (must be in the root directory), and specifying only source strips off the
-				path name and uses that as the name of the file. Omitting both will cause an error obviously.
+				Note: Either name or source attribute can be omitted. If only name is specified, it uses
+				that as the name of the source file, and specifying only source strips off the path name
+				and uses that as the name of the file. Omitting both will cause an error obviously.
 			-->
 			<!-- Stores system.txt as system.cnf -->
 			<file name="system.cnf"	type="data"	source="system.txt"/>

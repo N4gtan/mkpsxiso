@@ -32,7 +32,7 @@ namespace global
 };
 
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs);
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs, const fs::path& currentPath);
 int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
@@ -1202,6 +1202,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		isoIdentifiers.CreationDate = dateBuffer;
 	}
 
+	// Establish default entry attributes from XML (if any)
+	const EntryAttributes defaultAttributes = ReadEntryAttributes(EntryAttributes{}, trackElement->FirstChildElement(xml::elem::DEFAULT_ATTRIBUTES));
+
 	// Parse directory entries in the directory_tree element
 	if ( !global::QuietMode )
 	{
@@ -1220,12 +1223,15 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		return false;
 	}
 
-	const EntryAttributes defaultAttributes = ReadEntryAttributes(EntryAttributes{}, trackElement->FirstChildElement(xml::elem::DEFAULT_ATTRIBUTES));
+	const char* dirTreePath = directoryTree->Attribute(xml::attrib::ENTRY_SOURCE);
+	fs::path currentPath = dirTreePath != nullptr && *dirTreePath != 0
+		? (xmlPath / dirTreePath).lexically_normal()
+		: xmlPath;
 
 	iso::DIRENTRY& root = iso::DirTreeClass::CreateRootDirectory(entries, volumeDate, ReadEntryAttributes(defaultAttributes, directoryTree));
 	iso::DirTreeClass* dirTree = root.subdir.get();
 
-	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes) )
+	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes, currentPath) )
 	{
 		return false;
 	}
@@ -1254,7 +1260,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 	return true;
 }
 
-static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
 	const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE);
@@ -1290,7 +1296,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	else
 	{
 		name = nameElement;
-		srcFile = xmlPath / name;
+		srcFile = currentPath / name;
 	}
 
 	{ // ECMA-119 7.5.1 - File Identifier shall contain one dot and uppercase alphanumeric characters or underscores.
@@ -1414,10 +1420,13 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			sourceElement = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
 			if(sourceElement == nullptr || *sourceElement == 0)
 			{
-				printf( "ERROR: <%s %s=\"audio\" %s=\"%s\"> must have source\n", xml::elem::TRACK, xml::attrib::TRACK_TYPE, xml::attrib::TRACK_ID, trackid);
-				return false;
+				// Safe cast, the root object is mutable. Casting here to modify the attribute without refactoring the entire call chain.
+				const_cast<tinyxml2::XMLElement*>(trackElement)->SetAttribute(xml::attrib::ENTRY_SOURCE, srcFile.string().c_str());
 			}
-			srcFile = (xmlPath / sourceElement).lexically_normal();
+			else
+			{
+				srcFile = (xmlPath / sourceElement).lexically_normal();
+			}
 		}
 		else
 		{
@@ -1449,7 +1458,7 @@ static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLEleme
 	return true;
 }
 
-static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	fs::path srcDir;
 	std::string name;
@@ -1461,6 +1470,10 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 	if (const char *nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME); nameElement != nullptr && *nameElement != 0)
 	{
 		name = nameElement;
+		if (srcDir.empty())
+		{
+			srcDir = currentPath / name;
+		}
 	}
 	else if (!srcDir.empty())
 	{
@@ -1518,24 +1531,24 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		std::move(name), std::move(srcDir), ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
 
 	if ( subdir == nullptr )
 	{
 		return false;
 	}
 
-	return ParseDirectory(subdir, dirElement, xmlPath, defaultAttributes);
+	return ParseDirectory(subdir, dirElement, xmlPath, defaultAttributes, srcDir);
 }
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	for ( const tinyxml2::XMLElement* dirElement = parentElement->FirstChildElement(); dirElement != nullptr; dirElement = dirElement->NextSiblingElement() )
 	{
 		
 		if ( CompareICase( "file", dirElement->Name() ))
 		{
-			if (!ParseFileEntry(dirTree, dirElement, xmlPath, defaultAttributes))
+			if (!ParseFileEntry(dirTree, dirElement, xmlPath, defaultAttributes, currentPath))
 			{
 				return false;
 			}
@@ -1549,7 +1562,7 @@ bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* pare
         }
 		else if ( CompareICase( "dir", dirElement->Name() ))
 		{
-			if (!ParseDirEntry(dirTree, dirElement, xmlPath, defaultAttributes))
+			if (!ParseDirEntry(dirTree, dirElement, xmlPath, defaultAttributes, currentPath))
 			{
 				return false;
 			}
