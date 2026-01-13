@@ -1491,7 +1491,7 @@ int Main(int argc, char *argv[])
 
 	if (param::xmlFile.empty())
 	{
-		param::xmlFile = param::isoFile.stem() += ".xml";
+		param::xmlFile = param::outPath.stem() += ".xml";
 	}
 
 	if (CompareICase(param::isoFile.extension().string(), ".cue"))
