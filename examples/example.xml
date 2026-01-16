@@ -76,6 +76,11 @@
 		
 		<!-- <directory_tree>
 			Specifies and contains the directory structure for the data track.
+			
+			Attributes:
+				source	- Optional, specifies the directory path to the source files if no source attribute is
+						  specified to the <file> elements (optional, take note that it does not behave
+						  like cd or chdir and must be a complete path, can be a relative or absolute path).
 		-->
 		<directory_tree>
 		
@@ -119,7 +124,7 @@
 				
 				Attributes:
 					name	- Specifies the name of the subdirectory.
-					srcdir	- Specifies the directory path to the source files if no source attribute is
+					source	- Specifies the directory path to the source files if no source attribute is
 							  specified to the <file> elements (optional, can be a relative or absolute path).
 					hidden	- Optional, flag to set files/directories as "hidden" (see above for description).
 					order	- Optional, custom Directory Record order (see above for description).
@@ -181,7 +186,7 @@
 				A DA file must have a trackid that matches with with a <track>. The trackid is just a
 				string.
 				
-				You can still use <dummy> or <track> elements after this, if you want to add further audio tracks
+				You can still use <track> elements after this, if you want to add further audio tracks
 				that are not referenced by any DA file in the data track.
 			-->
 			<file name="audio1.da" trackid="02" type="da"/>
