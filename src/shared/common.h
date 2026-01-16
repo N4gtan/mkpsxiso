@@ -56,7 +56,7 @@ namespace global
 }
 
 // Helper functions for datestamp manipulation
-cd::ISO_DATESTAMP GetDateFromString(const char* str, bool* success = nullptr);
+bool ParseDateFromString(cd::ISO_DATESTAMP& result, const char* str, char defaultGMT = 36);
 bool ParseLongDateFromString(cd::ISO_LONG_DATESTAMP& result, const char* str, char defaultGMT = 36);
 cd::ISO_LONG_DATESTAMP GetUnspecifiedLongDate();
 std::string LongDateToString(const cd::ISO_LONG_DATESTAMP& src);

@@ -1173,14 +1173,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	// Establish the volume timestamp to either the current local time or isoIdentifiers.CreationDate (if specified)
 	cd::ISO_DATESTAMP volumeDate;
-	bool gotDateFromXML = false;
-	if ( isoIdentifiers.CreationDate != nullptr )
-	{
-		// Try to use time from XML. If it's malformed, fall back to local time.
-		volumeDate = GetDateFromString(isoIdentifiers.CreationDate, &gotDateFromXML);
-	}
-
-	if ( !gotDateFromXML )
+	// Try to use time from XML. If it's malformed, fall back to local time.
+	if ( !ParseDateFromString(volumeDate, isoIdentifiers.CreationDate) )
 	{
 		// Use local time
 		const tm imageTime = *localtime( &global::BuildTime );
