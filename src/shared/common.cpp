@@ -31,49 +31,43 @@ ISO_DATESTAMP GetDateFromString(const char* str, bool* success)
 	return result;
 }
 
-ISO_LONG_DATESTAMP GetLongDateFromString(const char* str)
+bool ParseLongDateFromString(ISO_LONG_DATESTAMP& result, const char* str, char defaultGMT)
 {
-	ISO_LONG_DATESTAMP result {};
+	if (!str || strlen(str) < 14)
+	{
+		result = GetUnspecifiedLongDate();
+		return false;
+	}
 
-	if (str) {
-		unsigned int year, month, day, hour, minute, second, hsecond {};
-
-		const int argsRead = sscanf( str, "%4u%2u%2u%2u%2u%2u%2u%hhd",
-			&year, &month, &day, &hour, &minute, &second, &hsecond, &result.GMToffs );
-
-		if (argsRead >= 6) {
-			if (argsRead < 8) {
-				// Consider GMToffs optional
-				result.GMToffs = 36;
-			}
-
-			auto intToChars = [](unsigned int value, char* dest, unsigned int size) {
-				for (int i = size - 1; i >= 0; --i) {
-					dest[i] = '0' + (value % 10);
-					value /= 10;
-				}
-			};
-
-			intToChars(year, result.year, 4);
-			intToChars(month, result.month, 2);
-			intToChars(day, result.day, 2);
-			intToChars(hour, result.hour, 2);
-			intToChars(minute, result.minute, 2);
-			intToChars(second, result.second, 2);
-			intToChars(hsecond, result.hsecond, 2);
-
-			return result;
+	for (int i = 0; i < 14; ++i)
+	{
+		if (!isdigit((unsigned char)str[i]))
+		{
+			result = GetUnspecifiedLongDate();
+			return false;
 		}
 	}
 
-	return GetUnspecifiedLongDate();
+	if (isdigit((unsigned char)str[14]) && isdigit((unsigned char)str[15]))
+	{
+		memcpy(&result, str, 16);
+		result.GMToffs = str[16] != 0 ? (char)atoi(str + 16) : defaultGMT;
+	}
+	else
+	{
+		memcpy(&result, str, 14);
+		memcpy(result.hsecond, "00", 2);
+		result.GMToffs = str[14] != 0 && (str[14] == '+' || str[14] == '-') ? (char)atoi(str + 14) : defaultGMT;
+	}
+
+	return true;
 }
 
 ISO_LONG_DATESTAMP GetUnspecifiedLongDate()
 {
 	ISO_LONG_DATESTAMP result;
 
-	memset(&result, '0', sizeof(result));
+	memset(&result, '0', sizeof(result) - 1);
 	result.GMToffs = 0;
 
 	return result;

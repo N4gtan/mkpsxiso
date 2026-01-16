@@ -1032,8 +1032,8 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	CopyStringPadWithSpaces( isoDescriptor.abstractFileIdentifier, nullptr );
 	CopyStringPadWithSpaces( isoDescriptor.bibliographicFilelIdentifier, nullptr );
 
-	isoDescriptor.volumeCreateDate = GetLongDateFromString(id.CreationDate);
-	isoDescriptor.volumeModifyDate = GetLongDateFromString(id.ModificationDate);
+	ParseLongDateFromString( isoDescriptor.volumeCreateDate, id.CreationDate );
+	ParseLongDateFromString( isoDescriptor.volumeModifyDate, id.ModificationDate );
 	isoDescriptor.volumeEffectiveDate = isoDescriptor.volumeExpiryDate = GetUnspecifiedLongDate();
 	isoDescriptor.fileStructVersion = 1;
 
