@@ -3,14 +3,16 @@
 
 using namespace cd;
 
-ISO_DATESTAMP GetDateFromString(const char* str, bool* success)
+bool ParseDateFromString(ISO_DATESTAMP& result, const char* str, char defaultGMT)
 {
-	bool succeeded = false;
-
-	ISO_DATESTAMP result {};
+	if (str == nullptr || strlen(str) < 14)
+	{
+		result = {.month = 1, .day = 1, .GMToffs = defaultGMT};
+		return false;
+	}
 
 	unsigned int year;
-	const int argsRead = sscanf( str, "%4u%2hhu%2hhu%2hhu%2hhu%2hhu%*2u%hhd",
+	const int argsRead = sscanf( str, "%4u%2hhu%2hhu%2hhu%2hhu%2hhu%*2[0-9]%hhd",
 		&year, &result.month, &result.day,
 		&result.hour, &result.minute, &result.second, &result.GMToffs );
 	if (argsRead >= 6)
@@ -19,16 +21,13 @@ ISO_DATESTAMP GetDateFromString(const char* str, bool* success)
 		if (argsRead < 7)
 		{
 			// Consider GMToffs optional
-			result.GMToffs = 36;
+			result.GMToffs = defaultGMT;
 		}
-		succeeded = true;
+		return true;
 	}
 
-	if (success != nullptr)
-	{
-		*success = succeeded;
-	}
-	return result;
+	result = {.month = 1, .day = 1, .GMToffs = defaultGMT};
+	return false;
 }
 
 bool ParseLongDateFromString(ISO_LONG_DATESTAMP& result, const char* str, char defaultGMT)
