@@ -59,6 +59,7 @@ namespace global
 bool ParseDateFromString(cd::ISO_DATESTAMP& result, const char* str, char defaultGMT = 36);
 bool ParseLongDateFromString(cd::ISO_LONG_DATESTAMP& result, const char* str, char defaultGMT = 36);
 cd::ISO_LONG_DATESTAMP GetUnspecifiedLongDate();
+std::string DateToString(const cd::ISO_DATESTAMP& src, bool ext);
 std::string LongDateToString(const cd::ISO_LONG_DATESTAMP& src);
 
 // Helper functions for sector conversion

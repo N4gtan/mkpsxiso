@@ -1188,12 +1188,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		volumeDate.GMToffs = static_cast<signed char>(-SYSTEM_TIMEZONE / 60 / 15); // Seconds to 15-minute units
 
 		// Convert ISO_DATESTAMP to ISO_LONG_DATESTAMP char*
-		static char dateBuffer[20];
-		snprintf(dateBuffer, sizeof(dateBuffer), "%04u%02hhu%02hhu%02hhu%02hhu%02hhu00%+hhd",
-				volumeDate.year + 1900, volumeDate.month, volumeDate.day,
-				volumeDate.hour, volumeDate.minute, volumeDate.second, volumeDate.GMToffs);
-
-		isoIdentifiers.CreationDate = dateBuffer;
+		static const std::string creationDate = DateToString(volumeDate, true);
+		isoIdentifiers.CreationDate = creationDate.c_str();
 	}
 
 	// Establish default entry attributes from XML (if any)
