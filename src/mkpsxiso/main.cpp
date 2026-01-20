@@ -18,7 +18,7 @@ namespace global
 	bool	noXA		= false;
 	int		trackNum	= 1;
 
-	std::optional<bool> new_type;
+	std::optional<bool> cdvd_style;
 	std::optional<std::string> volid_override;
 	std::optional<fs::path> cuefile;
 	fs::path XMLscript;
@@ -274,6 +274,11 @@ int Main(int argc, char* argv[])
 		{
 			continue;
 		}
+		if (const char *new_type = modifyTrack->Attribute("new_type"); new_type != nullptr && modifyTrack->Attribute(xml::attrib::CDVD_STYLE) == nullptr)
+		{
+			modifyTrack->SetAttribute(xml::attrib::CDVD_STYLE, new_type);
+			modifyTrack->DeleteAttribute("new_type"); // new_type is deprecated
+		}
 		tinyxml2::XMLElement *dt =  modifyTrack->FirstChildElement(xml::elem::DIRECTORY_TREE);
 		if(dt == nullptr)
 		{
@@ -287,7 +292,7 @@ int Main(int argc, char* argv[])
 			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr && scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
 			{
 				scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
-				scanElm->DeleteAttribute("srcdir");
+				scanElm->DeleteAttribute("srcdir"); // srcdir is deprecated
 			}
 			if(CompareICase(scanElm->Name(), xml::elem::FILE))
 			{
@@ -530,13 +535,13 @@ int Main(int argc, char* argv[])
 				global::xa_edc = trackElement->BoolAttribute(xml::attrib::XA_EDC, true);
 
 				// This check is necessary so as to leave an empty value for compatibility with <=v2.04 dumped files timestamps
-				if ( trackElement->Attribute(xml::attrib::NEW_TYPE) != nullptr )
+				if ( trackElement->Attribute(xml::attrib::CDVD_STYLE) != nullptr )
 				{
-					global::new_type = trackElement->BoolAttribute(xml::attrib::NEW_TYPE);
+					global::cdvd_style = trackElement->BoolAttribute(xml::attrib::CDVD_STYLE);
 				}
 				if ( (global::ps2 = trackElement->BoolAttribute(xml::attrib::PS2)) )
 				{
-					global::new_type = true; // Force true if it's an PS2 disc
+					global::cdvd_style = true; // Force true if it's an PS2 disc
 				}
 
 				if ( global::trackNum != 1 )
@@ -715,7 +720,7 @@ int Main(int argc, char* argv[])
 
 				dirTree->OutputLBAlisting( fp, 0 );
 
-				dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
 					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
@@ -753,7 +758,7 @@ int Main(int argc, char* argv[])
 
 				dirTree->OutputHeaderListing( fp, 0 );
 
-				dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
 					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
@@ -893,7 +898,7 @@ int Main(int argc, char* argv[])
 			}
 
 			// Write directory entries
-			dirTree->WriteDirectoryRecords( &writer, root, global::new_type.value_or(false) ? dirTree->GetDirCountTotal() : 0 );
+			dirTree->WriteDirectoryRecords( &writer, root, global::cdvd_style.value_or(false) ? dirTree->GetDirCountTotal() : 0 );
 
 			// Write file system descriptors to finish the image
 	        iso::WriteDescriptor( &writer, isoIdentifiers, root, totalLenLBA );
@@ -1229,7 +1234,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 	const int rootLBA = 18+(GetSizeInSectors(pathTableLen)*4);
 
 	// Sort directory entries, calculate tree LBAs and retrieve size of image
-	dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+	dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 	totalLen = dirTree->CalculateTreeLBA(rootLBA);
 
 	if ( !global::QuietMode )

@@ -307,7 +307,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 
 			if (numEntries++ >= 2)
 			{
-				if (*global::new_type)
+				if (*global::cdvd_style)
 				{
 					entry->order = order++;
 				}
@@ -323,7 +323,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 		});
 
 	// Delete orders if all are correct to avoid populate the xml with unnecessary strings
-	if (*global::new_type)
+	if (*global::cdvd_style)
 	{
 		auto& entriesInDir = dirEntryList.GetView();
 		for (int index = 0; index < entriesInDir.size(); index++)
