@@ -4,9 +4,9 @@
 
 typedef struct {
     uint8_t header[44];
-    uint64_t pos;   // actual file position
-    uint64_t vpos;  // virtual file position
-    uint64_t vsize; // virtual file size
+    int64_t pos;   // actual file position
+    int64_t vpos;  // virtual file position
+    int64_t vsize; // virtual file size
     FILE *file;
 } VirtualWav;
 
@@ -73,7 +73,7 @@ static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_
         if((byteOffset+vw->vpos) > vw->vsize) return MA_ERROR;
         if((byteOffset+vw->vpos) < 0) return MA_ERROR;
         vw->vpos += byteOffset;
-        uint64_t abspos = vw->pos + byteOffset;
+        int64_t abspos = vw->pos + byteOffset;
         if(abspos < 0)
         {
             byteOffset = -vw->pos;
@@ -95,7 +95,7 @@ static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_
             return MA_ERROR;
         }
 
-        result = fseek(vw->file, (int)byteOffset, whence);
+        result = fseek(vw->file, (long)byteOffset, whence);
     #endif
 #else
     result = fseek(vw->file, (long)byteOffset, whence);
