@@ -495,8 +495,6 @@ int Main(int argc, char* argv[])
 		std::vector<cdtrack> audioTracks;
 		iso::EntryList unrefTracks;
 
-		const tinyxml2::XMLElement* dataTrack = nullptr;
-
 		// Parse tracks
 		if ( !global::QuietMode )
 		{
@@ -529,7 +527,6 @@ int Main(int argc, char* argv[])
 			// Generate ISO file system for data track
 			if ( CompareICase( "data", track_type ) )
 			{
-				dataTrack = trackElement;
 				global::xa_edc = trackElement->BoolAttribute(xml::attrib::XA_EDC, true);
 
 				// This check is necessary so as to leave an empty value for compatibility with <=v2.04 dumped files timestamps
