@@ -144,7 +144,7 @@ void prepareRIFFHeader(cd::RIFF_HEADER* header, int dataSize) {
 // don't have EDC Form2 data (this can be checked at redump.org) and some games rely on this to do anti-piracy checks like DDR.
 const bool CheckEDCXA(cd::IsoReader &reader) {
 	cd::SECTOR_M2F2 sector;
-	while (reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE, true))
+	while (reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE))
 	{
 		if (sector.subHead[2] & 0x20) {
 			if (!memcmp(sector.edc, "\0\0\0\0", sizeof(sector.edc)))

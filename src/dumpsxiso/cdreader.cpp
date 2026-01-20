@@ -41,9 +41,14 @@ bool cd::IsoReader::Open(const fs::path& fileName)
 
 }
 
-size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
+inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd)
 {
-	if (currentSector >= totalSectors) {
+	if (currentSector >= totalSectors)
+	{
+		if (ptr)
+		{
+			memset(ptr, 0, bytes);
+		}
 		return 0;
 	}
 
@@ -52,15 +57,26 @@ size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
 
     while(bytes > 0)
 	{
-		const size_t toRead = std::min(F1_DATA_SIZE - currentByte, bytes);
+		if (currentByte < dataEnd)
+		{
+			if (currentByte < dataBeg)
+			{
+				currentByte = dataBeg;
+			}
 
-        memcpy(dataPtr+bytesRead, &sectorM2F1->data[currentByte], toRead);
+			const size_t toRead = std::min(dataEnd - currentByte, bytes);
 
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
+			if (ptr)
+			{
+				memcpy(dataPtr + bytesRead, &sectorBuff[currentByte], toRead);
+			}
 
-		if (currentByte >= F1_DATA_SIZE)
+			bytes		-= toRead;
+			bytesRead	+= toRead;
+			currentByte	+= toRead;
+		}
+
+		if (currentByte >= dataEnd)
 		{
 			if (singleSector || !PrepareNextSector())
 			{
@@ -70,98 +86,29 @@ size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
     }
 
     return bytesRead;
+}
 
+size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
+{
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
+	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesXA(void* ptr, size_t bytes, bool singleSector)
 {
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    char* const dataPtr = (char*)ptr;
-
-    while(bytes > 0)
-	{
-		const size_t toRead = std::min(XA_DATA_SIZE - currentByte, bytes);
-
-        memcpy(dataPtr+bytesRead, &sectorM2F2->subHead[currentByte], toRead);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= XA_DATA_SIZE)
-		{
-			if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-    return bytesRead;
-
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F2, subHead);
+	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + XA_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesDA(void* ptr, size_t bytes, bool singleSector)
 {
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    char* const dataPtr = (char*)ptr;
-
-    while(bytes > 0)
-	{
-		const size_t toRead = std::min(CD_SECTOR_SIZE - currentByte, bytes);
-
-        memcpy(dataPtr+bytesRead, &sectorBuff[currentByte], toRead);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= CD_SECTOR_SIZE)
-		{
-			if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-	return bytesRead;
-
+	return ReadBytesImpl(ptr, bytes, singleSector, 0, CD_SECTOR_SIZE);
 }
 
-size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector) {
-
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    while(bytes > 0) {
-
-        const size_t toRead = std::min(F1_DATA_SIZE - currentByte, bytes);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= F1_DATA_SIZE) {
-
-            if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-	return bytesRead;
+size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector)
+{
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
+	return ReadBytesImpl(nullptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
 bool cd::IsoReader::SeekToSector(int sector) {
@@ -266,7 +213,7 @@ size_t cd::IsoPathTable::ReadPathTable(cd::IsoReader* reader, int lba, unsigned 
 			// ECMA-119 9.4.6 - 00 field present only if entry length is an odd number
 			if ((length % 2) != 0)
 			{
-				bytesRead += reader->SkipBytes(1);
+				bytesRead += reader->SkipBytes(1, true);
 			}
 
 			// Strip trailing zeroes, if any
@@ -413,7 +360,7 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	// ECMA-119 9.1.12 - 00 field present only if file identifier length is an even number
 	if ((entry.entry.identifierLen % 2) == 0)
     {
-		bytesRead += reader->SkipBytes(1);
+		bytesRead += reader->SkipBytes(1, true);
     }
 
 	// Read XA attribute data
