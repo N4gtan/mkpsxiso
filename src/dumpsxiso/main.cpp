@@ -59,7 +59,7 @@ namespace global
 	CueFile cueFile;
 	bool ps2 = false;
 	bool xa_edc = true;
-	std::optional<bool> new_type;
+	std::optional<bool> cdvd_style;
 }
 
 fs::path GetEncodedDAPath(const fs::path& inputPath)
@@ -161,8 +161,9 @@ const bool CheckEDCXA()
 	return true;
 }
 
-// Games from 2003 and onwards apparenly has built with a newer Sony's mastering tool.
-// These has different submode in the descriptor sectors, a correct root year value and files are sorted by LBA instead by name.
+// Some games from ~2003 apparently were built with a tool newer than Sony CD-ROM Generator 1.40.
+// Likely an internal transition tool that shares the Sony CD/DVD-ROM Generator engine layout logic.
+// These have different submodes in the descriptor sectors, a correct root year value and entries are not sorted by name.
 const bool CheckISOver()
 {
 	cd::SECTOR_M2F2 sector;
@@ -459,7 +460,7 @@ std::unique_ptr<cd::IsoDirEntries> ParsePathTable(cd::IsoReader& reader, ListVie
 
 	// Calculate Directory Record sector size
 	int dirRecordSectors = 0;
-	if (*global::new_type && pathTableList.size() != index + 1)
+	if (*global::cdvd_style && pathTableList.size() != index + 1)
 	{
 		dirRecordSectors = pathTableList[index + 1].entry.dirOffs - pathTableList[index].entry.dirOffs;
 	}
@@ -1072,7 +1073,7 @@ void ParseISO(cd::IsoReader& reader) {
     cd::ISO_DESCRIPTOR descriptor;
 	auto license = ReadLicense(reader);
 	global::xa_edc = CheckEDCXA();
-	global::new_type = CheckISOver();
+	global::cdvd_style = CheckISOver();
 
     reader.SeekToSector(16);
     reader.ReadBytes(&descriptor, F1_DATA_SIZE);
@@ -1221,7 +1222,7 @@ void ParseISO(cd::IsoReader& reader) {
 			tinyxml2::XMLElement *trackElement = baseElement->InsertNewChildElement(xml::elem::TRACK);
 			trackElement->SetAttribute(xml::attrib::TRACK_TYPE, "data");
 			trackElement->SetAttribute(xml::attrib::XA_EDC, global::xa_edc);
-			trackElement->SetAttribute(xml::attrib::NEW_TYPE, *global::new_type);
+			trackElement->SetAttribute(xml::attrib::CDVD_STYLE, *global::cdvd_style);
 			if (global::ps2)
 			{
 				trackElement->SetAttribute(xml::attrib::PS2, global::ps2);

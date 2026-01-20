@@ -25,7 +25,7 @@ static const int RoundToEven(const int val)
 static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
 {
 	tm* timestamp;
-	if (global::new_type.has_value()) {
+	if (global::cdvd_style.has_value()) {
 		timestamp = CustomLocalTime(&time);
 	}
 	else {
@@ -89,9 +89,9 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	entry.type		= EntryType::EntryDir;
 	entry.subdir	= std::make_unique<DirTreeClass>(entries);
 	entry.date		= volumeDate;
-	if (!global::new_type.value_or(false))
+	if (!global::cdvd_style.value_or(false))
 	{
-		entry.date.year = volumeDate.year % 0x64; // Root overflows dates past 1999 for games built with old(<2003) mastering tool
+		entry.date.year = volumeDate.year % 0x64; // Root overflows dates past 99 for games built with Sony CD-ROM Generator 1.40 and older
 	}
 	entry.length	= 0; // Length is meaningless for directories
 	entry.HF		= attributes.HFLAG % 4;
@@ -1040,10 +1040,10 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 
 	// Write the descriptor
 	unsigned int currentHeaderLBA = 16;
-	const int ISOver = global::new_type.value_or(false);
+	const int ISOver = global::cdvd_style.value_or(false);
 
 	auto isoDescriptorSectors = writer->GetSectorViewM2F1(currentHeaderLBA, 2 + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	isoDescriptorSectors->SetSubheader(global::new_type.value_or(false) ? cd::IsoWriter::SubData : cd::IsoWriter::SubEOL);
+	isoDescriptorSectors->SetSubheader(global::cdvd_style.value_or(false) ? cd::IsoWriter::SubData : cd::IsoWriter::SubEOL);
 
 	isoDescriptorSectors->WriteMemory(&isoDescriptor, sizeof(isoDescriptor));
 
