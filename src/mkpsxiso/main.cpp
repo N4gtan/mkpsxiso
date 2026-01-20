@@ -1433,7 +1433,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 	}
 
-	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid);
+	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid, dirElement->Attribute(xml::attrib::ENTRY_DATE));
 }
 
 static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
@@ -1521,7 +1521,7 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists, dirElement->Attribute(xml::attrib::ENTRY_DATE) );
 
 	if ( subdir == nullptr )
 	{
