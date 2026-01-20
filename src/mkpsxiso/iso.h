@@ -74,7 +74,7 @@ namespace iso
 		DirTreeClass* parent; // Non-owning
 		
 		/// Internal function for generating and writing directory records
-		bool WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& dir, const DIRENTRY& parentDir, const int totalDirs) const;
+		void WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& dir, const DIRENTRY& parentDir, const int totalDirs) const;
 
 		/// Internal function for recursive path table generation
 		std::unique_ptr<PathTableClass> GenPathTableSub(unsigned short& index, unsigned short parentIndex) const;
@@ -152,7 +152,7 @@ namespace iso
 		 *
 		 *	*writer	- Pointer to a cd::IsoWriter class that is ready for writing.
 		 */
-		bool WriteFiles(cd::IsoWriter* writer) const;
+		void WriteFiles(cd::IsoWriter* writer) const;
 
 		/**	Writes the file system of the directory records to a CD image. Execute this after the source files
 		 *	have been written to the CD image.
@@ -161,7 +161,7 @@ namespace iso
 		 *	root		   - Root directory
 		 *  totalDirs	   - Total number of directories. Only usefull for games built with the latest sony mastering tool
 		 */
-		bool WriteDirectoryRecords(cd::IsoWriter* writer, const DIRENTRY& root, int totalDirs);
+		void WriteDirectoryRecords(cd::IsoWriter* writer, const DIRENTRY& root, int totalDirs) const;
 
 		void SortDirectoryEntries(const bool byOrder, const bool byLBA = false);
 

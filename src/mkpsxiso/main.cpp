@@ -32,7 +32,7 @@ namespace global
 };
 
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs, const fs::path& currentPath);
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath);
 int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
@@ -1433,18 +1433,6 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid, dirElement->Attribute(xml::attrib::ENTRY_DATE));
 }
 
-static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
-{
-	// TODO: For now this is a hack, unify this code again with the file type in the future
-	// so it isn't as awkward
-
-	dirTree->AddDummyEntry( dirElement->UnsignedAttribute(xml::attrib::NUM_DUMMY_SECTORS),
-							dirElement->UnsignedAttribute(xml::attrib::ENTRY_TYPE),
-							dirElement->UnsignedAttribute(xml::attrib::OFFSET),
-							dirElement->BoolAttribute(xml::attrib::ECC_ADDRES) );
-	return true;
-}
-
 static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	fs::path srcDir;
@@ -1542,10 +1530,10 @@ bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* pare
 		}
 		else if ( CompareICase( "dummy", dirElement->Name() ))
 		{
-			if (!ParseDummyEntry(dirTree, dirElement))
-			{
-				return false;
-			}
+			dirTree->AddDummyEntry( dirElement->UnsignedAttribute(xml::attrib::NUM_DUMMY_SECTORS),
+									dirElement->UnsignedAttribute(xml::attrib::ENTRY_TYPE),
+									dirElement->UnsignedAttribute(xml::attrib::OFFSET),
+									dirElement->BoolAttribute(xml::attrib::ECC_ADDRES) );
         }
 		else if ( CompareICase( "dir", dirElement->Name() ))
 		{

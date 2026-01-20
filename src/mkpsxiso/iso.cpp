@@ -445,7 +445,7 @@ void iso::DirTreeClass::SortDirectoryEntries(const bool byOrder, const bool byLB
 	}
 }
 
-bool iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& dir, const DIRENTRY& parentDir, const int totalDirs) const
+void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& dir, const DIRENTRY& parentDir, const int totalDirs) const
 {
 	//char	dataBuff[2048] {};
 	//char*	dataBuffPtr=dataBuff;
@@ -570,63 +570,45 @@ bool iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& d
 			writeOneEntry(entry);
 		}
 	}
-
-	return true;
 }
 
-bool iso::DirTreeClass::WriteDirectoryRecords(cd::IsoWriter* writer, const DIRENTRY& root, int totalDirs)
+void iso::DirTreeClass::WriteDirectoryRecords(cd::IsoWriter* writer, const DIRENTRY& root, int totalDirs) const
 {
-	if(!WriteDirEntries( writer, root, root, totalDirs ))
-	{
-		return false;
-	}
+	WriteDirEntries( writer, root, root, totalDirs );
 
 	for ( const auto& entry : entries )
 	{
 		if ( !entry.id.empty() && entry.type == EntryType::EntryDir )
 		{
-			if (totalDirs > 0) {
+			if (totalDirs > 0)
+			{
 				totalDirs--;
 			}
-			if ( !entry.subdir->WriteDirEntries(writer, entry, *entry.subdir->parent->entry, totalDirs) )
-			{
-				return false;
-			}
+			entry.subdir->WriteDirEntries(writer, entry, *entry.subdir->parent->entry, totalDirs);
 		}
 	}
-
-	return true;
 }
 
-bool iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
+void iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 {
 	for ( const DIRENTRY& entry : entries )
 	{
 		// Write files as regular data sectors
 		if ( entry.type == EntryType::EntryFile )
 		{
-			if ( !entry.srcfile.empty() )
+			if ( !global::QuietMode )
 			{
-				if ( !global::QuietMode )
-				{
-					printf( "    Packing \"%s\"... ", entry.srcfile.string().c_str() );
-					fflush(stdout);
-				}
+				printf( "    Packing \"%s\"... ", entry.srcfile.string().c_str() );
+				fflush(stdout);
+			}
 
-				FILE *fp = OpenFile( entry.srcfile, "rb" );
-				if (fp != nullptr)
-				{
-					auto sectorView = writer->GetSectorViewM2F1(entry.lba, GetSizeInSectors(entry.length), cd::IsoWriter::EdcEccForm::Form1);
-					sectorView->WriteFile(fp);
+			auto fp = OpenScopedFile( entry.srcfile, "rb" );
+			auto sectorView = writer->GetSectorViewM2F1(entry.lba, GetSizeInSectors(entry.length), cd::IsoWriter::EdcEccForm::Form1);
+			sectorView->WriteFile(fp.get());
 
-					fclose(fp);
-				}
-
-				if ( !global::QuietMode )
-				{
-					printf("Done.\n");
-				}
-
+			if ( !global::QuietMode )
+			{
+				printf("Done.\n");
 			}
 
 		// Write XA/STR video streams as Mode 2 Form 1 (video sectors) and Mode 2 Form 2 (XA audio sectors)
@@ -640,14 +622,9 @@ bool iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 				fflush(stdout);
 			}
 
-			FILE *fp = OpenFile( entry.srcfile, "rb" );
-			if (fp != nullptr)
-			{
-				auto sectorView = writer->GetSectorViewM2F2(entry.lba, GetSizeInSectors(entry.length, XA_DATA_SIZE), cd::IsoWriter::EdcEccForm::Autodetect);
-				sectorView->WriteFile(fp);
-
-				fclose( fp );
-			}			
+			auto fp = OpenScopedFile( entry.srcfile, "rb" );
+			auto sectorView = writer->GetSectorViewM2F2(entry.lba, GetSizeInSectors(entry.length, XA_DATA_SIZE), cd::IsoWriter::EdcEccForm::Autodetect);
+			sectorView->WriteFile(fp.get());
 
 			if (!global::QuietMode)
 			{
@@ -658,29 +635,20 @@ bool iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 		}
 		else if ( entry.type == EntryType::EntryXA_DO )
 		{
-			if ( !entry.srcfile.empty() )
+			if ( !global::QuietMode )
 			{
-				if ( !global::QuietMode )
-				{
-					printf( "    Packing XA-DO \"%s\"... ", entry.srcfile.string().c_str() );
-					fflush(stdout);
-				}
+				printf( "    Packing XA-DO \"%s\"... ", entry.srcfile.string().c_str() );
+				fflush(stdout);
+			}
 
-				FILE *fp = OpenFile( entry.srcfile, "rb" );
-				if (fp != nullptr)
-				{
-					auto sectorView = writer->GetSectorViewM2F1(entry.lba, GetSizeInSectors(entry.length), cd::IsoWriter::EdcEccForm::Form1);
-					sectorView->SetSubheader(cd::IsoWriter::SubSTR);
-					sectorView->WriteFile(fp);
+			auto fp = OpenScopedFile( entry.srcfile, "rb" );
+			auto sectorView = writer->GetSectorViewM2F1(entry.lba, GetSizeInSectors(entry.length), cd::IsoWriter::EdcEccForm::Form1);
+			sectorView->SetSubheader(cd::IsoWriter::SubSTR);
+			sectorView->WriteFile(fp.get());
 
-					fclose(fp);
-				}
-
-				if ( !global::QuietMode )
-				{
-					printf("Done.\n");
-				}
-
+			if ( !global::QuietMode )
+			{
+				printf("Done.\n");
 			}
 		}
 		// Write dummies as gaps without data
@@ -700,8 +668,6 @@ bool iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 			continue;
 		}
 	}
-
-	return true;
 }
 
 void iso::DirTreeClass::OutputHeaderListing(FILE* fp, int level) const
