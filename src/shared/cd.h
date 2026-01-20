@@ -12,6 +12,10 @@
 // CD and ISO 9660 reader namespace
 namespace cd {
 
+	// Set struct alignment to 1 because the ISO file system is not very memory alignment friendly which will
+	// result to alignment issues when reading data entries with structs.
+	#pragma pack(push, 1)
+
 	/// Structure for a mode 2 form 1 sector (used in regular files)
 	typedef struct {
 		unsigned char	sync[12];	/// Sync pattern (usually 00 FF FF FF FF FF FF FF FF FF FF 00)
@@ -51,10 +55,6 @@ namespace cd {
 		unsigned char	data[2324];	/// Data (form 2)
 		unsigned char	edc[4];		/// Error-detection code (CRC32 of data area)
 	} SECTOR_M2F2;
-
-	// Set struct alignment to 1 because the ISO file system is not very memory alignment friendly which will
-	// result to alignment issues when reading data entries with structs.
-	#pragma pack(push, 1)
 
 	/// Structure of a double-endian unsigned short word
 	typedef struct {
