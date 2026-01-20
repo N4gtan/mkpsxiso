@@ -62,7 +62,7 @@
 
 ## Issues
 
-On `ext4` and `xfs` filesystems, the minimum timestamp you can set is 1901/12/13, which makes games that has files/folders with dates older than that (like Crash Bash, Spyro3, Vagrant Story, etc) impossible to be rebuilt 1:1. A workaround to this is to work on a fs that has better date support, like `f2fs` `ntfs` `btrfs`.
+On `ext4` and `xfs` filesystems, if there is no XML `date` attribute, the minimum supported date is 1901/12/13. This makes games that have files/folders with dates older than that (like Crash Bash, Spyro3, Vagrant Story, etc.) impossible to rebuild 1:1. A workaround is to work on a fs that has better date support, like `f2fs`, `ntfs` or `btrfs`.
 
 The other known major issue that hasn't (or cannot) be resolved is that if you create a disc image with the following directory structure:
 
