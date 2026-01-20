@@ -57,6 +57,8 @@ namespace param {
 namespace global
 {
 	CueFile cueFile;
+	bool ps2 = false;
+	bool xa_edc = true;
 	std::optional<bool> new_type;
 }
 
@@ -142,12 +144,14 @@ void prepareRIFFHeader(cd::RIFF_HEADER* header, int dataSize) {
 
 // This will ensure that the EDC remains the same as in the original file. Games built with an old, buggy Sony's mastering tool version
 // don't have EDC Form2 data (this can be checked at redump.org) and some games rely on this to do anti-piracy checks like DDR.
-const bool CheckEDCXA(cd::IsoReader &reader) {
+const bool CheckEDCXA()
+{
 	cd::SECTOR_M2F2 sector;
-	while (reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE))
+	while (cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE))
 	{
-		if (sector.subHead[2] & 0x20) {
-			if (!memcmp(sector.edc, "\0\0\0\0", sizeof(sector.edc)))
+		if (sector.subHead[2] & 0x20)
+		{
+			if (memcmp(sector.edc, "\0\0\0\0", sizeof(sector.edc)) == 0)
 			{
 				return false;
 			}
@@ -159,16 +163,16 @@ const bool CheckEDCXA(cd::IsoReader &reader) {
 
 // Games from 2003 and onwards apparenly has built with a newer Sony's mastering tool.
 // These has different submode in the descriptor sectors, a correct root year value and files are sorted by LBA instead by name.
-const bool CheckISOver(cd::IsoReader &reader, bool& ps2)
+const bool CheckISOver()
 {
 	cd::SECTOR_M2F2 sector;
-	reader.SeekToSector(15);
-	reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE);
+	cd::reader->SeekToSector(15);
+	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE);
 	if (sector.subHead[2] & 0x08)
 	{
-		ps2 = true;
+		global::ps2 = true;
 	}
-	reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE, true);
+	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE, true);
 	if (sector.subHead[2] & 0x01)
 	{
 		return false;
@@ -1068,10 +1072,9 @@ void WriteXMLByDirectories(const cd::IsoDirEntries* directory, tinyxml2::XMLElem
 void ParseISO(cd::IsoReader& reader) {
 
     cd::ISO_DESCRIPTOR descriptor;
-	bool ps2 = false;
 	auto license = ReadLicense(reader);
-	const bool xa_edc = CheckEDCXA(reader);
-	global::new_type = CheckISOver(reader, ps2);
+	global::xa_edc = CheckEDCXA();
+	global::new_type = CheckISOver();
 
     reader.SeekToSector(16);
     reader.ReadBytes(&descriptor, F1_DATA_SIZE);
@@ -1219,11 +1222,11 @@ void ParseISO(cd::IsoReader& reader) {
 
 			tinyxml2::XMLElement *trackElement = baseElement->InsertNewChildElement(xml::elem::TRACK);
 			trackElement->SetAttribute(xml::attrib::TRACK_TYPE, "data");
-			trackElement->SetAttribute(xml::attrib::XA_EDC, xa_edc);
+			trackElement->SetAttribute(xml::attrib::XA_EDC, global::xa_edc);
 			trackElement->SetAttribute(xml::attrib::NEW_TYPE, *global::new_type);
-			if (ps2)
+			if (global::ps2)
 			{
-				trackElement->SetAttribute(xml::attrib::PS2, ps2);
+				trackElement->SetAttribute(xml::attrib::PS2, global::ps2);
 			}
 
 			{
@@ -1505,7 +1508,7 @@ int Main(int argc, char *argv[])
 		global::cueFile = parseCueFile(param::isoFile);
 	}
 
-	cd::IsoReader reader;
+	cd::IsoReader& reader = *(cd::reader = std::make_unique<cd::IsoReader>());
 
 	if (!reader.Open(param::isoFile)) {
 
