@@ -32,6 +32,7 @@
 						  If new_type is not specified, defaults to 'false'.
 			ps2			- Optional, for data track only, specifies if the image is a Playstation 2 one. Defaults to 'false'.
 			source		- For audio tracks only, specifies the file name of a wav audio file as source data for the audio track.
+			trackid		- For audio tracks only, links the track to a 'da' type file. More details below.
 	-->
 	<track type="data" xa_edc="true" new_type="false">
 	
@@ -100,6 +101,8 @@
 										 'xa' and 'str' can also be used as aliases for 'mixed'.
 								'da': is for CD-DA audio files. More details below.
 							  If no value for type is specified, the default is 'data'.
+					trackid - For 'da' type files only, links the file to an audio track. More details below.
+					date	- Optional, custom file timestamp. Format is YYYYMMDDHHMMSS.
 					hidden	- Optional, flag to set files/directories as "hidden". Options are
 								'0': not hidden. (Default)
 								'1': hidden.
@@ -126,6 +129,7 @@
 					name	- Specifies the name of the subdirectory.
 					source	- Specifies the directory path to the source files if no source attribute is
 							  specified to the <file> elements (optional, can be a relative or absolute path).
+					date	- Optional, custom file timestamp. Format is YYYYMMDDHHMMSS.
 					hidden	- Optional, flag to set files/directories as "hidden" (see above for description).
 					order	- Optional, custom Directory Record order (see above for description).
 						  
