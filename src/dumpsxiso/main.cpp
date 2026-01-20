@@ -108,7 +108,7 @@ void PrintDate(const char* label, const cd::ISO_LONG_DATESTAMP& date)
 }
 
 template<size_t N>
-static std::string_view CleanDescElement(char (&id)[N])
+static std::string_view CleanDescElement(const char (&id)[N])
 {
 	std::string_view result;
 
@@ -575,21 +575,14 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			// For ex, Mega Man X3 track 30 had 149 sectors pause, but at redump.org says it was a 150 standard one
 			unsigned char sectorBuff[CD_SECTOR_SIZE];
 			unsigned char emptyBuff[CD_SECTOR_SIZE] {};
-			while (true)
+			while (reader.SeekToSector(entry.entry.entryOffs.lsb - 1) || multiBinSeeker(entry.entry.entryOffs.lsb - 1, entry, reader, global::cueFile))
 			{
-				if (!reader.SeekToSector(entry.entry.entryOffs.lsb - 1) && !multiBinSeeker(entry.entry.entryOffs.lsb - 1, entry, reader, global::cueFile))
+				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
+				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE) == 0)
 					break;
 
-				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
-				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE))
-				{
-					entry.entry.entryOffs.lsb--;
-					entry.entry.entrySize.lsb += F1_DATA_SIZE;
-				}
-				else
-				{
-					break;
-				}
+				entry.entry.entryOffs.lsb--;
+				entry.entry.entrySize.lsb += F1_DATA_SIZE;
 			}
 		}
 
@@ -628,12 +621,12 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	return DAfiles;
 }
 
-void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries, unsigned int currentLBA, unsigned int totalLenLBA)
+void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries, unsigned int currentLBA, const unsigned int totalLenLBA)
 {
 	cd::SECTOR_M2F2 sector;
-	int filenum = 0;
+	int fileCount = 0;
 
-	auto processGaps = [&](unsigned int endLBA)
+	auto processGaps = [&](const unsigned int endLBA)
 	{
 		cd::IsoDirEntries::Entry* gapEntry = &entries.front(); // Get root stats
 		signed char rootGMTOff = gapEntry->entry.entryDate.GMToffs;
@@ -660,12 +653,12 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 				gapEntry->extData.attributes 	  = rootPrm;
 				if ((sector.subHead[2] & 0x7E) == 0x08)
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", filenum++, "DAT");
+					gapEntry->identifier = std::format("UNKN{:04}.{};1", fileCount++, "DAT");
 					gapEntry->type = EntryType::EntryFile;
 				}
 				else
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", filenum++, "STR");
+					gapEntry->identifier = std::format("UNKN{:04}.{};1", fileCount++, "STR");
 					gapEntry->type = EntryType::EntryXA;
 				}
 			}
@@ -1151,7 +1144,7 @@ void ParseISO(cd::IsoReader& reader) {
 	// Process DA tracks and add them to the entries list
 	auto DAfiles = ParseDAfiles(reader, entries);
 
-	unsigned totalLenLBA = descriptor.volumeSize.lsb;
+	const unsigned totalLenLBA = descriptor.volumeSize.lsb;
 	if (param::force)
 	{
 		BruteForce(reader, entries, descriptor.rootDirRecord.entryOffs.lsb, totalLenLBA);
