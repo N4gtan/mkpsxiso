@@ -72,6 +72,20 @@ ISO_LONG_DATESTAMP GetUnspecifiedLongDate()
 	return result;
 }
 
+std::string DateToString(const cd::ISO_DATESTAMP& src, bool ext)
+{
+	char buf[20];
+	snprintf(buf, sizeof(buf), "%04u%02hhu%02hhu%02hhu%02hhu%02hhu",
+		src.year + 1900u, src.month, src.day, src.hour, src.minute, src.second);
+
+	if (ext)
+	{
+		snprintf(buf + 14, 6, "00%+hhd", src.GMToffs);
+	}
+
+	return std::string(buf);
+}
+
 std::string LongDateToString(const cd::ISO_LONG_DATESTAMP& src)
 {
 	// Interpret ISO_LONG_DATESTAMP as 16 characters, manually write out GMT offset
