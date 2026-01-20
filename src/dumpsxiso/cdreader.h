@@ -35,16 +35,16 @@ namespace cd {
         // Open ISO image
         bool Open(const fs::path& fileName);
 
-        // Read form1 data(2048) sector in bytes (supports sequential reading)
+        // Read bytes from M2F1 sector payload (2048: Data) (supports sequential reading)
         size_t ReadBytes(void* ptr, size_t bytes, bool singleSector = false);
 
-        // Read form2 subheader+data+edc(2336) sector in bytes (supports sequential reading)
+        // Read bytes from M2F2 sector payload (2336: Sub+Data+EDC) (supports sequential reading)
         size_t ReadBytesXA(void* ptr, size_t bytes, bool singleSector = false);
 
-        // Read whole(2352) sector in bytes (supports sequential reading)
+        // Read bytes from RAW sector payload (2352: Whole) (supports sequential reading)
         size_t ReadBytesDA(void* ptr, size_t bytes, bool singleSector = false);
 
-        // Skip bytes in data sectors (supports sequential skipping)
+        // Skip bytes from M2F1 sector payload (2048: Data) (supports sequential skipping)
         size_t SkipBytes(size_t bytes, bool singleSector = false);
 
         // Seek to a sector in the ISO image in sector units (returns true if success)
@@ -61,6 +61,7 @@ namespace cd {
 
     private:
         bool PrepareNextSector();
+        size_t ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd);
 
     };
 
