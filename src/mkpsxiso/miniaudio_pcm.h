@@ -51,54 +51,39 @@ static ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t
 
 static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_seek_origin origin)
 {
-    int whence;
     int result;
     VirtualWav *vw = (VirtualWav *)pDecoder->pUserData;
 
-    if (origin == ma_seek_origin_start) {
-        if(byteOffset < 0) return MA_ERROR;
-        if(byteOffset > vw->vsize) return MA_ERROR;
-        vw->vpos = byteOffset;
-        byteOffset = ma_dr_wav_max(byteOffset - 44, 0);
-        vw->pos = byteOffset;
-        whence = SEEK_SET;
-    } else if (origin == ma_seek_origin_end) {
-        if(byteOffset > 0) return MA_ERROR;
-        if((byteOffset + vw->vsize) < 0) return MA_ERROR;
-        vw->vpos = vw->vsize + byteOffset;
-        byteOffset = ma_dr_wav_max(byteOffset, -(vw->vsize - 44));
-        vw->pos = (vw->vsize - 44) + byteOffset;
-        whence = SEEK_END;
-    } else {
-        if((byteOffset+vw->vpos) > vw->vsize) return MA_ERROR;
-        if((byteOffset+vw->vpos) < 0) return MA_ERROR;
-        vw->vpos += byteOffset;
-        int64_t abspos = vw->pos + byteOffset;
-        if(abspos < 0)
-        {
-            byteOffset = -vw->pos;
-        }
-        else if(abspos > (vw->vsize-44))
-        {
-            byteOffset = (vw->vsize-44) - vw->pos;
-        }
-        vw->pos += byteOffset;
-        whence = SEEK_CUR;
+    if (origin == ma_seek_origin_end)
+    {
+        byteOffset += vw->vsize;
     }
+    else if (origin == ma_seek_origin_current)
+    {
+        byteOffset += vw->vpos;
+    }
+
+    if (byteOffset < 0 || byteOffset > vw->vsize)
+    {
+        return MA_ERROR;
+    }
+
+    vw->vpos = byteOffset;
+    vw->pos  = ma_dr_wav_max(byteOffset - 44, 0);
 
 #if defined(_WIN32)
     #if (defined(_MSC_VER) && _MSC_VER > 1200) || defined(__MINGW64__)
-        result = _fseeki64(vw->file, byteOffset, whence);
+        result = _fseeki64(vw->file, vw->pos, SEEK_SET);
     #else
         /* No _fseeki64() so restrict to 31 bits. */
-        if (byteOffset > 0x7FFFFFFF) {
+        if (vw->pos > 0x7FFFFFFF) {
             return MA_ERROR;
         }
 
-        result = fseek(vw->file, (long)byteOffset, whence);
+        result = fseek(vw->file, (long)vw->pos, SEEK_SET);
     #endif
 #else
-    result = fseek(vw->file, (long)byteOffset, whence);
+    result = fseek(vw->file, (long)vw->pos, SEEK_SET);
 #endif
     if (result != 0) {
         return MA_ERROR;
