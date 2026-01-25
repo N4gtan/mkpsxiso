@@ -1,5 +1,6 @@
 #include "iso.h"		// ISO file system generator module
 #include "xml.h"
+#include <format>
 
 #define MA_NO_THREADING
 #define MA_NO_DEVICE_IO
@@ -44,7 +45,7 @@ bool UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const un
 		if(entry.trackid != trackid) continue;
 		if(entry.lba != iso::DA_FILE_PLACEHOLDER_LBA)
 		{
-			printf( "ERROR: Cannot replace entry.lba when it is not 0x%X\n ", iso::DA_FILE_PLACEHOLDER_LBA);
+			printf( "ERROR: Cannot replace entry.lba for trackid=\"%s\" when it is not 0x%X\n", entry.trackid.c_str(), iso::DA_FILE_PLACEHOLDER_LBA);
 			return false;
 		}
 		entry.lba = lba;
@@ -262,21 +263,32 @@ int Main(int argc, char* argv[])
 		}
     }
 
-	// Fix XML tree to our current spec
+	// Check if there is an <iso_project> element
+	const tinyxml2::XMLElement* projectElement = xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
+	if ( projectElement == nullptr )
+	{
+		printf( "ERROR: Cannot find <iso_project> element in XML document.\n" );
+		return EXIT_FAILURE;
+	}
+
+	// Fix old XML trees to our current spec
 	// convert DA file source syntax to DA file trackid syntax
-	unsigned trackindex = 2;
 	for(tinyxml2::XMLElement *modifyProject = xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
 		modifyProject != nullptr;
 		modifyProject = modifyProject->NextSiblingElement(xml::elem::ISO_PROJECT))
 	{
+		unsigned audioIndex = 0;
 		tinyxml2::XMLElement *modifyTrack = modifyProject->FirstChildElement(xml::elem::TRACK);
 		if((modifyTrack == nullptr) || (!modifyTrack->Attribute(xml::attrib::TRACK_TYPE, "data")))
 		{
 			continue;
 		}
-		if (const char *new_type = modifyTrack->Attribute("new_type"); new_type != nullptr && modifyTrack->Attribute(xml::attrib::CDVD_STYLE) == nullptr)
+		if (const char *new_type = modifyTrack->Attribute("new_type"); new_type != nullptr)
 		{
-			modifyTrack->SetAttribute(xml::attrib::CDVD_STYLE, new_type);
+			if (modifyTrack->Attribute(xml::attrib::CDVD_STYLE) == nullptr)
+			{
+				modifyTrack->SetAttribute(xml::attrib::CDVD_STYLE, new_type);
+			}
 			modifyTrack->DeleteAttribute("new_type"); // new_type is deprecated
 		}
 		tinyxml2::XMLElement *dt =  modifyTrack->FirstChildElement(xml::elem::DIRECTORY_TREE);
@@ -284,33 +296,84 @@ int Main(int argc, char* argv[])
 		{
 			continue;
 		}
+		std::vector<std::tuple<tinyxml2::XMLElement *, std::string_view, std::string_view>> audioTracks;
 		std::queue<tinyxml2::XMLElement *> toscan({dt});
 		while(!toscan.empty())
 		{
 			tinyxml2::XMLElement *scanElm = toscan.front();
 			toscan.pop();
-			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr && scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr)
 			{
-				scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
+				if (scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+				{
+					scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
+				}
 				scanElm->DeleteAttribute("srcdir"); // srcdir is deprecated
 			}
 			if(CompareICase(scanElm->Name(), xml::elem::FILE))
 			{
 				if(scanElm->Attribute(xml::attrib::ENTRY_TYPE, "da"))
 				{
-					const char *trackid = scanElm->Attribute(xml::attrib::TRACK_ID);
 					const char *source = scanElm->Attribute(xml::attrib::ENTRY_SOURCE);
-					if((trackid != nullptr) && (source != nullptr))
+					if(source != nullptr && *source != 0)
 					{
-						printf( "ERROR: Cannot specify trackid and source at the same time\n ");
-		                return EXIT_FAILURE;
-					}
-					if(source != nullptr)
-					{
-						char tid[3];
-						snprintf(tid, sizeof(tid), "%02u", trackindex);
-						std::string trackid = tid;
-						trackindex++;
+						auto updateAudioIndexFromTID = [&](const char *tid) -> const char*
+						{
+							if (int id = atoi(tid); audioIndex <= id)
+							{
+								audioIndex = id + 1;
+							}
+							return tid;
+						};
+
+						// Index existing tracks only once
+						if (audioIndex == 0)
+						{
+							for (tinyxml2::XMLElement *t = modifyTrack->NextSiblingElement(xml::elem::TRACK); t != nullptr; t = t->NextSiblingElement(xml::elem::TRACK))
+							{
+								const char* tid = t->Attribute(xml::attrib::TRACK_ID);
+								const char* src = t->Attribute(xml::attrib::TRACK_SOURCE);
+								audioTracks.emplace_back(t, tid ? updateAudioIndexFromTID(tid) : "", src ? src : "");
+							}
+						}
+
+						// Reuse or create track for this DA file
+						const std::string trackid = [&]() -> std::string
+						{
+							if (const char* tid = scanElm->Attribute(xml::attrib::TRACK_ID); tid != nullptr && *tid != 0)
+							{
+								return updateAudioIndexFromTID(tid);
+							}
+							return std::format("{:02}", audioIndex++);
+						}();
+
+						auto matchByID = audioTracks.end();
+						std::string_view sourceSV = source;
+						for (auto it = audioTracks.begin(); it != audioTracks.end(); ++it)
+						{
+							auto& [t, tid, src] = *it;
+							// reuse track with same source if possible
+							if (src == sourceSV)
+							{
+								modifyTrack = t;
+								modifyTrack->SetAttribute(xml::attrib::TRACK_ID, trackid.c_str());
+								audioTracks.erase(it);
+								goto update_file;
+							}
+							if (tid == trackid)
+							{
+								matchByID = it;
+							}
+						}
+
+						// reuse track with same ID if source not matched
+						if (matchByID != audioTracks.end())
+						{
+							modifyTrack = std::get<0>(*matchByID);
+							modifyTrack->SetAttribute(xml::attrib::TRACK_SOURCE, source);
+							audioTracks.erase(matchByID);
+							goto update_file;
+						}{
 
                         // add a new track
 						tinyxml2::XMLElement *newtrack = xmlFile.NewElement(xml::elem::TRACK);
@@ -323,7 +386,7 @@ int Main(int argc, char* argv[])
 						modifyProject->InsertAfterChild(modifyTrack, newtrack);
 						modifyTrack = newtrack;
 
-						// update the file to point to the track
+						}update_file: // update the file to point to the track
 						scanElm->DeleteAttribute(xml::attrib::ENTRY_SOURCE);
 						scanElm->SetAttribute(xml::attrib::TRACK_ID, trackid.c_str());
 					}
@@ -365,18 +428,7 @@ int Main(int argc, char* argv[])
 	    return EXIT_SUCCESS;
 	}
 
-	// Check if there is an <iso_project> element
-    const tinyxml2::XMLElement* projectElement =
-		xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
-
-    if ( projectElement == nullptr )
-	{
-		printf( "ERROR: Cannot find <iso_project> element in XML document.\n" );
-		return EXIT_FAILURE;
-    }
-
     int imagesCount = 0;
-
 	// Build loop for XML scripts with multiple <iso_project> elements
 	while ( projectElement != nullptr )
 	{
