@@ -311,8 +311,7 @@ void iso::DirTreeClass::PrintRecordPath()
 
 int iso::DirTreeClass::CalculateTreeLBA(int lba)
 {
-	int maxFlba = 0;
-	int sizeMax = 0;
+	int size;
 
 	for ( DIRENTRY& entry : entries )
 	{
@@ -329,38 +328,23 @@ int iso::DirTreeClass::CalculateTreeLBA(int lba)
 				entry.subdir->name = entry.id;
 			}
 
-			lba += GetSizeInSectors(entry.subdir->CalculateDirEntryLen());		
+			size = GetSizeInSectors(entry.subdir->CalculateDirEntryLen());
+		}
+		else if (entry.type != EntryType::EntryDA)
+		{
+			// Increment LBA by the size of file
+			size = GetSizeInSectors(entry.length, entry.type == EntryType::EntryXA ? XA_DATA_SIZE : F1_DATA_SIZE);
 		}
 		else
 		{
-			// Increment LBA by the size of file
-			if ( entry.type == EntryType::EntryXA )
-			{
-				if (entry.flba > maxFlba) {
-					maxFlba = entry.flba;
-					sizeMax = GetSizeInSectors(entry.length, XA_DATA_SIZE);
-				}
-
-				lba += GetSizeInSectors(entry.length, XA_DATA_SIZE);
-			}
-			else if ( entry.type == EntryType::EntryDA )
-			{
-				// DA files don't take up any space in the ISO filesystem, they are just links to CD tracks
-				entry.lba = iso::DA_FILE_PLACEHOLDER_LBA; // we will write the lba into the filesystem when writing the CDDA track
-			}
-			else
-			{	
-				if (entry.flba > maxFlba) {
-					maxFlba = entry.flba;
-					sizeMax = GetSizeInSectors(entry.length, F1_DATA_SIZE);
-				}
-
-				lba += GetSizeInSectors(entry.length, F1_DATA_SIZE);
-			}
+			// DA files don't take up any space in the ISO filesystem, they are just links to CD tracks
+			entry.lba = iso::DA_FILE_PLACEHOLDER_LBA; // we will write the lba into the filesystem when writing the CDDA track
+			continue;
 		}
+
+		// Prevent rewind on forced LBAs
+		lba = std::max(lba, entry.lba + size);
 	}
-	if (maxFlba)
-		return maxFlba + sizeMax;
 
 	return lba;
 }
