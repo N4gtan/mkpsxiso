@@ -89,9 +89,6 @@ private:
 	std::unique_ptr<ThreadPool> m_threadPool;
 };
 
-ISO_USHORT_PAIR SetPair16(unsigned short val);
-ISO_UINT_PAIR SetPair32(unsigned int val);
-
 };
 
 #endif // _CDWRITER_H
