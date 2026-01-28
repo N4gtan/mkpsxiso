@@ -22,6 +22,16 @@ static const int RoundToEven(const int val)
 	return (val + 1) & -2;
 }
 
+static cd::ISO_USHORT_PAIR SetPair16(unsigned short val)
+{
+    return { val, SwapBytes16(val) };
+}
+
+static cd::ISO_UINT_PAIR SetPair32(unsigned int val)
+{
+	return { val, SwapBytes32(val) };
+}
+
 static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
 {
 	tm* timestamp;
@@ -478,9 +488,9 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& d
 			length = entry.length;
 		}
 
-		dirEntry->entryOffs = cd::SetPair32( entry.lba );
-		dirEntry->entrySize = cd::SetPair32( length );
-		dirEntry->volSeqNum = cd::SetPair16( 1 );
+		dirEntry->entryOffs = SetPair32( entry.lba );
+		dirEntry->entrySize = SetPair32( length );
+		dirEntry->volSeqNum = SetPair16( 1 );
 		dirEntry->entryDate = entry.date;
 
 		// Normal case - write out the identifier
@@ -996,18 +1006,18 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	unsigned int pathTableLen = dirTree->CalculatePathTableLen(root);
 	unsigned int pathTableSectors = GetSizeInSectors(pathTableLen);
 
-	isoDescriptor.volumeSetSize = cd::SetPair16( 1 );
-	isoDescriptor.volumeSeqNumber = cd::SetPair16( 1 );
-	isoDescriptor.sectorSize = cd::SetPair16( F1_DATA_SIZE );
-	isoDescriptor.pathTableSize = cd::SetPair32( pathTableLen );
+	isoDescriptor.volumeSetSize = SetPair16( 1 );
+	isoDescriptor.volumeSeqNumber = SetPair16( 1 );
+	isoDescriptor.sectorSize = SetPair16( F1_DATA_SIZE );
+	isoDescriptor.pathTableSize = SetPair32( pathTableLen );
 
 	// Setup the root directory record
 	isoDescriptor.rootDirRecord.entryLength = 34;
 	isoDescriptor.rootDirRecord.extLength	= 0;
-	isoDescriptor.rootDirRecord.entryOffs = cd::SetPair32( 18+(pathTableSectors*4) );
-	isoDescriptor.rootDirRecord.entrySize = cd::SetPair32( dirTree->CalculateDirEntryLen() );
+	isoDescriptor.rootDirRecord.entryOffs = SetPair32( 18+(pathTableSectors*4) );
+	isoDescriptor.rootDirRecord.entrySize = SetPair32( dirTree->CalculateDirEntryLen() );
 	isoDescriptor.rootDirRecord.flags = 0x02 | root.HF;
-	isoDescriptor.rootDirRecord.volSeqNum = cd::SetPair16( 1 );
+	isoDescriptor.rootDirRecord.volSeqNum = SetPair16( 1 );
 	isoDescriptor.rootDirRecord.identifierLen = 1;
 	isoDescriptor.rootDirRecord.identifier = 0x0;
 
@@ -1020,7 +1030,7 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	isoDescriptor.pathTable1MSBoffs = SwapBytes32( isoDescriptor.pathTable1MSBoffs );
 	isoDescriptor.pathTable2MSBoffs = SwapBytes32( isoDescriptor.pathTable2MSBoffs );
 
-	isoDescriptor.volumeSize = cd::SetPair32( imageLen );
+	isoDescriptor.volumeSize = SetPair32( imageLen );
 
 	// Write the descriptor
 	unsigned int currentHeaderLBA = 16;

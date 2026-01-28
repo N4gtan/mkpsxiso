@@ -11,14 +11,6 @@ namespace global
 	extern bool xa_edc;
 }
 
-ISO_USHORT_PAIR cd::SetPair16(unsigned short val) {
-    return { val, SwapBytes16(val) };
-}
-
-ISO_UINT_PAIR cd::SetPair32(unsigned int val) {
-	return { val, SwapBytes32(val) };
-}
-
 bool IsoWriter::Create(const fs::path& fileName, unsigned int sizeLBA)
 {
 	const uint64_t sizeBytes = static_cast<uint64_t>(sizeLBA) * CD_SECTOR_SIZE;
