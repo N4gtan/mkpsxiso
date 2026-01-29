@@ -170,7 +170,6 @@ int Main(int argc, char* argv[])
 			if (auto output = ParsePathArgument(args, "L", "license"); output.has_value())
 			{
 				global::LicenseFile = output->lexically_normal();
-				OutputOverride = true;
 				continue;
 			}
 			if (auto newxmlfile = ParsePathArgument(args, "rebuildxml"); newxmlfile.has_value())
@@ -435,7 +434,7 @@ int Main(int argc, char* argv[])
 		imagesCount++;
 		if ( imagesCount > 1 && OutputOverride )
 		{
-			printf( "ERROR: -o/-c/-L switches cannot be used in a multi-disc ISO "
+			printf( "ERROR: -o or -c switches cannot be used in a multi-disc ISO "
 				"project.\n" );
 			return EXIT_FAILURE;
 		}

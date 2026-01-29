@@ -269,13 +269,9 @@ static EntryType GetXAEntryType(unsigned short xa_attr)
 		// if the mode 2 form 1 flag is set, and form 2 is not, we assume this is a regular file.
 		return EntryType::EntryFile;
 	}
-	if ( (xa_attr & 0x10) && !(xa_attr & 0x08) )
-	{
-		// if the mode 2 form 2 flag is set, and form 1 is not, we assume this is a pure audio xa file.
-		return EntryType::EntryXA;
-	}
 
-	// here all flags are set to the same value. From what I could see until now, when both flags are the same,
+	// If the mode 2 form 2 flag (0x10) is set, and form 1 (0x08) is not, we assume this is a pure audio xa file.
+	// Otherwise, all flags are set to the same value. From what I could see until now, when both flags are the same,
 	// this is interpreted in the following two ways, which both lead us to choose str/xa type.
 	// 1. Both values are 1, which means there is an indication by the mode 2 form 2 flag that the data is not
 	//    regular mode 2 form 1 data (i.e., it is either mixed or just xa).
