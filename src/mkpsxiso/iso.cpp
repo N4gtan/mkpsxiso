@@ -386,16 +386,17 @@ int iso::DirTreeClass::CalculateDirEntryLen() const
 			dataLen += sizeof( cdxa::ISO_XA_ATTRIB );
 		}
 
-		if ( ((dirEntryLen % F1_DATA_SIZE) + dataLen) > F1_DATA_SIZE )
+		constexpr int SECTOR_MASK = F1_DATA_SIZE - 1;
+		if ( ((dirEntryLen & SECTOR_MASK) + dataLen) > F1_DATA_SIZE )
 		{
 			// Round dirEntryLen to the nearest multiple of 2048 as the rest of that sector is "unusable"
-			dirEntryLen = ((dirEntryLen + 2047) / F1_DATA_SIZE) * F1_DATA_SIZE;
+			dirEntryLen = (dirEntryLen + SECTOR_MASK) & ~SECTOR_MASK;
 		}
 
 		dirEntryLen += dataLen;
 	}
 
-	return F1_DATA_SIZE * GetSizeInSectors(dirEntryLen);
+	return dirEntryLen;
 }
 
 void iso::DirTreeClass::SortDirectoryEntries(const bool byOrder, const bool byLBA)
@@ -481,7 +482,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& d
 		}
 		else if (entry.type == EntryType::EntryDir)
 		{
-			length = entry.subdir->CalculateDirEntryLen();
+			length = F1_DATA_SIZE * GetSizeInSectors(entry.subdir->CalculateDirEntryLen());
 		}
 		else
 		{
@@ -1015,7 +1016,7 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	isoDescriptor.rootDirRecord.entryLength = 34;
 	isoDescriptor.rootDirRecord.extLength	= 0;
 	isoDescriptor.rootDirRecord.entryOffs = SetPair32( 18+(pathTableSectors*4) );
-	isoDescriptor.rootDirRecord.entrySize = SetPair32( dirTree->CalculateDirEntryLen() );
+	isoDescriptor.rootDirRecord.entrySize = SetPair32( GetSizeInSectors(dirTree->CalculateDirEntryLen())*F1_DATA_SIZE );
 	isoDescriptor.rootDirRecord.flags = 0x02 | root.HF;
 	isoDescriptor.rootDirRecord.volSeqNum = SetPair16( 1 );
 	isoDescriptor.rootDirRecord.identifierLen = 1;
