@@ -1020,12 +1020,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		trackElement->FirstChildElement(xml::elem::IDENTIFIERS);
 
 	// Set file system identifiers
-
 	if ( identifierElement != nullptr )
 	{
-		const char* identifierFile;
-		
-		// Otherwise use individual elements defined by each attribute
+		// Use individual elements defined by each attribute
 		isoIdentifiers.SystemID		= identifierElement->Attribute(xml::attrib::SYSTEM_ID);
 		isoIdentifiers.VolumeID		= identifierElement->Attribute(xml::attrib::VOLUME_ID);
 		isoIdentifiers.VolumeSet	= identifierElement->Attribute(xml::attrib::VOLUME_SET);
@@ -1037,7 +1034,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		isoIdentifiers.ModificationDate = identifierElement->Attribute(xml::attrib::MODIFICATION_DATE);
 
 		// Is an ID file specified?
-		if( (identifierFile = identifierElement->Attribute(xml::attrib::ID_FILE)) )
+		if( const char* identifierFile = identifierElement->Attribute(xml::attrib::ID_FILE) )
 		{
 			// Load the file as an XML document
 			{
@@ -1100,7 +1097,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 					isoIdentifiers.ModificationDate = str;
 			}
 		}
+	}
 
+	{ // Set default identifiers if not present
 		bool hasSystemID = true;
 		if ( isoIdentifiers.SystemID == nullptr )
 		{
