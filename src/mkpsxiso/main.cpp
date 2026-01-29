@@ -1364,8 +1364,9 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 				return false;
 			}
 		}
+		/* Legend of Mana does not follow this rule.
 		if (dots == 0)
-			name += '.';
+			name += '.';*/
 	}
 
 	// ECMA-119 7.5.1 and 10.1 - File Identifier shall be 1-30 characters long plus one dot.
