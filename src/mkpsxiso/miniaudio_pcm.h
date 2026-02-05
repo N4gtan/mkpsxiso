@@ -1,27 +1,15 @@
 #pragma once
-#include "common.h"
+
 #include "miniaudio.h"
+#include "platform.h"
 
 typedef struct {
     uint8_t header[44];
     int64_t pos;   // actual file position
     int64_t vpos;  // virtual file position
     int64_t vsize; // virtual file size
-    FILE *file;
+    unique_file file;
 } VirtualWav;
-
-MA_API ma_result ma_decoder_init_FILE_pcm(FILE *file, ma_decoder_config* pConfig, ma_decoder* pDecoder, VirtualWav *pUserData);
-
-#ifdef __cplusplus
-#include "platform.h"
-
-class VirtualWavEx : public VirtualWav {
-    public:
-    unique_file pcmFp;
-};
-
-MA_API ma_result ma_decoder_init_path_pcm(const fs::path& pFilePath, ma_decoder_config* pConfig, ma_decoder* pDecoder, VirtualWavEx *pUserData);
-#endif
 
 #if defined(MINIAUDIO_IMPLEMENTATION) || defined(MA_IMPLEMENTATION)
 
@@ -40,7 +28,7 @@ static ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t
     }
     if(bytesToRead > 0)
     {
-        const size_t actualread = fread(pBufferOut, 1, bytesToRead, vw->file);
+        const size_t actualread = fread(pBufferOut, 1, bytesToRead, vw->file.get());
         bytesRead += actualread;
         vw->vpos += actualread;
         vw->pos += actualread;
@@ -71,7 +59,7 @@ static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_
     vw->vpos = byteOffset;
     vw->pos  = ma_dr_wav_max(byteOffset - 44, 0);
 
-    if (SeekFile(vw->file, vw->pos, SEEK_SET) != 0)
+    if (SeekFile(vw->file.get(), vw->pos, SEEK_SET) != 0)
     {
         return MA_ERROR;
     }
@@ -105,10 +93,17 @@ static ma_result stdio_file_size(FILE *file, uint64_t *pSizeInBytes)
     return MA_SUCCESS;
 }
 
-inline MA_API ma_result ma_decoder_init_FILE_pcm(FILE *file, ma_decoder_config* pConfig, ma_decoder* pDecoder, VirtualWav *pUserData)
+// feed to miniaudio as a wav file
+inline MA_API ma_result ma_decoder_init_path_pcm(const fs::path& pFilePath, ma_decoder_config* pConfig, ma_decoder* pDecoder, VirtualWav *pUserData)
 {
+    pUserData->file.reset(OpenFile(pFilePath, "rb"));
+    if(!pUserData->file)
+    {
+        return MA_INVALID_FILE;
+    }
+
     uint64_t pcmSize;
-    if(stdio_file_size(file, &pcmSize) != MA_SUCCESS)
+    if(stdio_file_size(pUserData->file.get(), &pcmSize) != MA_SUCCESS)
     {
         return MA_ERROR;
     }
@@ -157,7 +152,7 @@ inline MA_API ma_result ma_decoder_init_FILE_pcm(FILE *file, ma_decoder_config* 
     pUserData->header[29] = (uint8_t)(byteRate >> 8);
     pUserData->header[30] = byteRate >> 16;
     pUserData->header[31] = byteRate >> 24;
-    const uint16_t blockalign = numchannels * (bitspersample/8);;
+    const uint16_t blockalign = numchannels * (bitspersample/8);
     pUserData->header[32] = blockalign;
     pUserData->header[33] = blockalign >> 8;
     pUserData->header[34] = bitspersample;
@@ -168,32 +163,8 @@ inline MA_API ma_result ma_decoder_init_FILE_pcm(FILE *file, ma_decoder_config* 
     pUserData->header[42] = pcmSize >> 16;
     pUserData->header[43] = pcmSize >> 24;
 
-    pUserData->file = file;
-
     pConfig->encodingFormat = ma_encoding_format_wav;
-    if(ma_decoder_init(&virtual_wav_read, &virtual_wav_seek, pUserData, pConfig, pDecoder) != MA_SUCCESS)
-    {
-        return MA_ERROR;
-    }
-
-    return MA_SUCCESS;
+    return ma_decoder_init(&virtual_wav_read, &virtual_wav_seek, pUserData, pConfig, pDecoder);
 }
-#ifdef __cplusplus
-// feed to pcm file to miniaudio as a wav file
-inline MA_API ma_result ma_decoder_init_path_pcm(const fs::path& pFilePath, ma_decoder_config* pConfig, ma_decoder* pDecoder, VirtualWavEx *pUserData)
-{
-    unique_file file(OpenFile(pFilePath, "rb"));
-    if(!file)
-    {
-        return MA_INVALID_FILE;
-    }
-    if(ma_decoder_init_FILE_pcm(file.get(), pConfig, pDecoder, pUserData) != MA_SUCCESS)
-    {
-        return MA_NO_BACKEND;
-    }
-    pUserData->pcmFp = std::move(file);
-    return MA_SUCCESS;
-}
-#endif
 
 #endif

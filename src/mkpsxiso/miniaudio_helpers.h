@@ -1,11 +1,8 @@
 #pragma once
 
-#ifdef __cplusplus
 #include "miniaudio_pcm.h"
 
-ma_result ma_decoder_init_path(const fs::path& pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
-ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, ma_decoder* pDecoder, VirtualWavEx* vw, bool& isLossy, bool& isPCM);
+ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, ma_decoder* pDecoder, VirtualWav* vw, bool& isLossy, bool& isPCM);
 
 #if defined(MINIAUDIO_IMPLEMENTATION) || defined(MA_IMPLEMENTATION)
 
@@ -27,7 +24,7 @@ typedef enum {
 } DecoderAudioFormats;
 
 // Helper wrapper to open as redbook (44100kHz stereo s16le) audio and use the file extension to determine the order to try decoders
-inline ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, ma_decoder* pDecoder, VirtualWavEx* vw, bool& isLossy, bool& isPCM)
+inline ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, ma_decoder* pDecoder, VirtualWav* vw, bool& isLossy, bool& isPCM)
 {
 	ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_s16, 2, 44100);	
 	isLossy = false;
@@ -103,7 +100,5 @@ inline ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, m
 	}
 	return MA_SUCCESS;
 }
-
-#endif
 
 #endif

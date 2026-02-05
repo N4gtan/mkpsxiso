@@ -1617,7 +1617,7 @@ bool PackFileAsCDDA(void* buffer, const fs::path& audioFile)
 {
 	// open the decoder
 	ma_decoder decoder;
-	VirtualWavEx vw;
+	VirtualWav vw;
 	bool isLossy;
 	bool isPCM;
 	if(ma_redbook_decoder_init_path_by_ext(audioFile, &decoder, &vw, isLossy, isPCM) != MA_SUCCESS)
