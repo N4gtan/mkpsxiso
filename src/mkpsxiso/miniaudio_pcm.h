@@ -71,21 +71,8 @@ static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_
     vw->vpos = byteOffset;
     vw->pos  = ma_dr_wav_max(byteOffset - 44, 0);
 
-#if defined(_WIN32)
-    #if (defined(_MSC_VER) && _MSC_VER > 1200) || defined(__MINGW64__)
-        result = _fseeki64(vw->file, vw->pos, SEEK_SET);
-    #else
-        /* No _fseeki64() so restrict to 31 bits. */
-        if (vw->pos > 0x7FFFFFFF) {
-            return MA_ERROR;
-        }
-
-        result = fseek(vw->file, (long)vw->pos, SEEK_SET);
-    #endif
-#else
-    result = fseek(vw->file, (long)vw->pos, SEEK_SET);
-#endif
-    if (result != 0) {
+    if (SeekFile(vw->file, vw->pos, SEEK_SET) != 0)
+    {
         return MA_ERROR;
     }
 
