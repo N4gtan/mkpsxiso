@@ -65,7 +65,7 @@ static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs, const
 int iso::DirTreeClass::GetAudioSize(const fs::path& audioFile)
 {
 	ma_decoder decoder;
-	VirtualWavEx vw;
+	VirtualWav vw;
 	bool isLossy;
 	bool isPCM;
 	if(ma_redbook_decoder_init_path_by_ext(audioFile, &decoder, &vw, isLossy, isPCM) != MA_SUCCESS)
