@@ -19,6 +19,7 @@
 #endif
 
 FILE* OpenFile(const fs::path& path, const char* mode);
+int SeekFile(FILE *file, int64_t offset, int origin);
 std::optional<struct stat64> Stat(const fs::path& path);
 int64_t GetSize(const fs::path& path);
 void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate);
