@@ -7,11 +7,8 @@ cd::IsoReader::IsoReader()
 
 cd::IsoReader::~IsoReader()
 {
-    if (filePtr != NULL)
-		fclose(filePtr);
-
+	Close();
 }
-
 
 bool cd::IsoReader::Open(const fs::path& fileName)
 {
@@ -22,11 +19,10 @@ bool cd::IsoReader::Open(const fs::path& fileName)
     if (filePtr == NULL)
 		return(false);
 
-	fseek(filePtr, 0, SEEK_END);
-	totalSectors = ftell(filePtr) / CD_SECTOR_SIZE;
-	fseek(filePtr, 0, SEEK_SET);
+	totalSectors = GetSize(fileName) / CD_SECTOR_SIZE;
 
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
+	if (!ReadSector())
+	{
 		Close();
 		return false;
 	}
@@ -34,11 +30,21 @@ bool cd::IsoReader::Open(const fs::path& fileName)
     currentByte		= 0;
     currentSector	= 0;
 
-    sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
 	return(true);
 
+}
+
+inline bool cd::IsoReader::ReadSector()
+{
+	if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1)
+	{
+		return false;
+	}
+
+	sectorM2F1 = reinterpret_cast<cd::SECTOR_M2F1*>(sectorBuff);
+	sectorM2F2 = reinterpret_cast<cd::SECTOR_M2F2*>(sectorBuff);
+
+	return true;
 }
 
 inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd)
@@ -111,43 +117,33 @@ size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector)
 	return ReadBytesImpl(nullptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
-bool cd::IsoReader::SeekToSector(int sector) {
-
+bool cd::IsoReader::SeekToSector(const uint32_t sector)
+{
 	if (sector >= totalSectors || filePtr == nullptr)
 		return false;
 
-    fseek(filePtr, CD_SECTOR_SIZE*sector, SEEK_SET);
-	if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
+    if (SeekFile(filePtr, CD_SECTOR_SIZE*static_cast<int64_t>(sector), SEEK_SET) != 0 ||
+		!ReadSector())
+	{
 		return false;
 	}
 
 	currentSector = sector;
 	currentByte = 0;
 
-	sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
-	return !ferror(filePtr);
-
+	return true;
 }
 
-size_t cd::IsoReader::SeekToByte(size_t offs) {
-
-	int sector = (offs/CD_SECTOR_SIZE);
-
-	fseek(filePtr, CD_SECTOR_SIZE*sector, SEEK_SET);
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
-		return 0;
+bool cd::IsoReader::SeekToByte(const size_t offs)
+{
+	if (!SeekToSector(offs/CD_SECTOR_SIZE))
+	{
+		return false;
 	}
 
-	currentSector = sector;
 	currentByte = offs%CD_SECTOR_SIZE;
 
-	sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
-	return (CD_SECTOR_SIZE*static_cast<size_t>(currentSector))+currentByte;
-
+	return true;
 }
 
 size_t cd::IsoReader::GetPos() const
@@ -169,13 +165,11 @@ bool cd::IsoReader::PrepareNextSector()
 	currentByte = 0;
 	currentSector++;
 
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1)
+	if (!ReadSector())
 	{
 		return false;
-    }
+	}
 
-    sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-	sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
 	return true;
 }
 

@@ -48,10 +48,10 @@ namespace cd {
         size_t SkipBytes(size_t bytes, bool singleSector = false);
 
         // Seek to a sector in the ISO image in sector units (returns true if success)
-        bool SeekToSector(int sector);
+        bool SeekToSector(const uint32_t sector);
 
-        // Seek to a data offset in the ISO image in byte units
-        size_t SeekToByte(size_t offs);
+        // Seek to a data offset in the ISO image in byte units (returns true if success)
+        bool SeekToByte(const size_t offs);
 
         // Get current offset in byte units
         size_t GetPos() const;
@@ -60,6 +60,7 @@ namespace cd {
         void Close();
 
     private:
+        bool ReadSector();
         bool PrepareNextSector();
         size_t ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd);
 
