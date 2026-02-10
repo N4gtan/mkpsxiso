@@ -145,7 +145,7 @@ public:
 		while (m_currentLBA < m_endLBA)
 		{
 			PrepareSectorHeader();
-			SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOF);
+			SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOX);
 
 			const size_t bytesRead = fread(sector->data, 1, F1_DATA_SIZE, file);
 			// Fill the remainder of the sector with zeroes if applicable
@@ -165,7 +165,7 @@ public:
 		}
 	}
 
-	void WriteMemory(const void* memory, size_t size) override
+	void WriteMemory(const void* memory, size_t size, const bool setEOX) override
 	{
 		const char* buf = static_cast<const char*>(memory);
 		const unsigned int lastLBA = m_endLBA - 1;
@@ -177,7 +177,7 @@ public:
 			if (m_offsetInSector == 0)
 			{
 				PrepareSectorHeader();
-				SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOF);
+				SetSubHeader(sector->subHead, m_currentLBA != lastLBA || !setEOX ? m_subHeader : IsoWriter::SubEOX);
 			}
 
 			const size_t memToCopy = std::min(GetSpaceInCurrentSector(), size);
@@ -324,7 +324,7 @@ public:
 		}
 	}
 
-	void WriteMemory(const void* memory, size_t size) override
+	void WriteMemory(const void* memory, size_t size, const bool /*setEOX*/) override
 	{
 		const char* buf = static_cast<const char*>(memory);
 
