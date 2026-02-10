@@ -445,11 +445,11 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& d
 	//char	entryBuff[128];
 	//int		dirlen;
 
-	auto sectorView = writer->GetSectorViewM2F1(dir.lba, GetSizeInSectors(CalculateDirEntryLen()) + totalDirs, cd::IsoWriter::EdcEccForm::Form1);
+	auto sectorView = writer->GetSectorViewM2F1(dir.lba, GetSizeInSectors(CalculateDirEntryLen()), cd::IsoWriter::EdcEccForm::Form1);
 
 	//writer->SeekToSector( dir.lba );
 
-	auto writeOneEntry = [&sectorView](const DIRENTRY& entry, std::optional<bool> currentOrParent = std::nullopt) -> void
+	auto writeOneEntry = [&sectorView, totalDirs](const DIRENTRY& entry, std::optional<bool> currentOrParent = std::nullopt) -> void
 	{
 		std::byte buffer[128] {};
 
@@ -549,7 +549,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& d
 		{
 			sectorView->NextSector();
 		}
-		sectorView->WriteMemory(buffer, entryLength);
+		sectorView->WriteMemory(buffer, entryLength, totalDirs == 0);
 	};
 
 	writeOneEntry(dir, false);
@@ -1035,10 +1035,10 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 
 	// Write the descriptor
 	unsigned int currentHeaderLBA = 16;
-	const int ISOver = global::cdvd_style.value_or(false);
+	const bool setEnd = !global::cdvd_style.value_or(false);
 
-	auto isoDescriptorSectors = writer->GetSectorViewM2F1(currentHeaderLBA, 2 + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	isoDescriptorSectors->SetSubheader(global::cdvd_style.value_or(false) ? cd::IsoWriter::SubData : cd::IsoWriter::SubEOL);
+	auto isoDescriptorSectors = writer->GetSectorViewM2F1(currentHeaderLBA, 2, cd::IsoWriter::EdcEccForm::Form1);
+	isoDescriptorSectors->SetSubheader(setEnd ? cd::IsoWriter::SubEOR : cd::IsoWriter::SubData);
 
 	isoDescriptorSectors->WriteMemory(&isoDescriptor, sizeof(isoDescriptor));
 
@@ -1048,7 +1048,7 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	isoDescriptor.header.version = 1;
 	CopyStringPadWithSpaces( isoDescriptor.header.id, "CD001" );
 
-	isoDescriptorSectors->WriteMemory(&isoDescriptor, sizeof(isoDescriptor));
+	isoDescriptorSectors->WriteMemory(&isoDescriptor, sizeof(isoDescriptor), setEnd);
 	currentHeaderLBA += 2;
 
 	// Generate and write L-path table
@@ -1056,22 +1056,22 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	auto sectorBuff = std::make_unique<unsigned char[]>(pathTableSize);
 
 	dirTree->GeneratePathTable( root, sectorBuff.get(), false );
-	auto lpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	lpathTable1->WriteMemory(sectorBuff.get(), pathTableSize);
+	auto lpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
+	lpathTable1->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 	currentHeaderLBA += pathTableSectors;
 
-	auto lpathTable2 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	lpathTable2->WriteMemory(sectorBuff.get(), pathTableSize);
+	auto lpathTable2 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
+	lpathTable2->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 	currentHeaderLBA += pathTableSectors;
 
 	// Generate and write M-path table
 	dirTree->GeneratePathTable( root, sectorBuff.get(), true );
-	auto mpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	mpathTable1->WriteMemory(sectorBuff.get(), pathTableSize);
+	auto mpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
+	mpathTable1->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 	currentHeaderLBA += pathTableSectors;
 
-	auto mpathTable2 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors + ISOver, cd::IsoWriter::EdcEccForm::Form1);
-	mpathTable2->WriteMemory(sectorBuff.get(), pathTableSize);
+	auto mpathTable2 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
+	mpathTable2->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 }
 
 unsigned char* iso::PathTableClass::GenTableData(unsigned char* buff, bool msb)

@@ -21,10 +21,10 @@ public:
 	};
 		
 	enum {
-		SubData	= 0x00080000,
-		SubSTR	= 0x00480100,
-		SubEOL	= 0x00090000,
-		SubEOF	= 0x00890000,
+		SubData	= 0x00080000, // Data
+		SubSTR	= 0x00480100, // Stream (0x01: CN, 0x48: RT | Data)
+		SubEOR	= 0x00090000, // End of Record
+		SubEOX	= 0x00890000, // End of Extent (0x89: EOF | Data | EOR)
 	};
 
 	class SectorView
@@ -34,7 +34,7 @@ public:
 		virtual ~SectorView();
 
 		virtual void WriteFile(FILE* file) = 0;
-		virtual void WriteMemory(const void* memory, size_t size) = 0;
+		virtual void WriteMemory(const void* memory, size_t size, const bool setEOX = true) = 0;
 		virtual void WriteBlankSectors(unsigned int count, const unsigned char submode = 0x20, const bool eccAddr = false) = 0;
 		virtual size_t GetSpaceInCurrentSector() const = 0;
 		virtual void NextSector() = 0;
