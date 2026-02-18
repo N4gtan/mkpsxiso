@@ -195,7 +195,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	std::vector<char*> u8argv;
-	u8Arguments.reserve(argc + 1);
+	u8argv.reserve(argc + 1);
 	for (std::string& str : u8Arguments)
 	{
 		u8argv.emplace_back(str.data());
