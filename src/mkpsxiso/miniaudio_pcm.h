@@ -39,7 +39,6 @@ static ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t
 
 static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_seek_origin origin)
 {
-    int result;
     VirtualWav *vw = (VirtualWav *)pDecoder->pUserData;
 
     if (origin == ma_seek_origin_end)

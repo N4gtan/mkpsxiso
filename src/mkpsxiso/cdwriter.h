@@ -48,7 +48,6 @@ public:
 		void CalculateForm1(const bool eccAddr = false);
 		void CalculateForm2();
 
-	protected:
 		void* m_currentSector = nullptr;
 		size_t m_offsetInSector = 0;
 		unsigned int m_currentLBA = 0;
