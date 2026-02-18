@@ -102,12 +102,12 @@ namespace cd {
         };
         ListView<Entry> dirEntryList;
 
-        IsoDirEntries(ListView<Entry> view);
+        explicit IsoDirEntries(ListView<Entry> view);
         void ReadDirEntries(cd::IsoReader* reader, int lba, int sectors);
         void ReadRootDir(cd::IsoReader* reader, int lba);
 
     private:
-        std::optional<Entry> ReadEntry(cd::IsoReader* reader) const;
+        static std::optional<Entry> ReadEntry(cd::IsoReader* reader);
     };
 
 }

@@ -49,30 +49,26 @@ inline bool cd::IsoReader::ReadSector()
 
 inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd)
 {
-	if (currentSector >= totalSectors)
-	{
-		if (ptr)
-		{
-			memset(ptr, 0, bytes);
-		}
-		return 0;
-	}
-
 	size_t bytesRead = 0;
     char* const dataPtr = (char*)ptr;
 
+	if (currentSector >= totalSectors) [[unlikely]]
+		goto eof_fill;
+
     while(bytes > 0)
 	{
-		if (currentByte < dataEnd)
-		{
-			if (currentByte < dataBeg)
-			{
-				currentByte = dataBeg;
-			}
+		if (currentByte >= dataEnd) [[unlikely]]
+			goto check_next_sector;
 
+		if (currentByte < dataBeg)
+		{
+			currentByte = dataBeg;
+		}
+
+		{
 			const size_t toRead = std::min(dataEnd - currentByte, bytes);
 
-			if (ptr)
+			if (dataPtr != nullptr)
 			{
 				memcpy(dataPtr + bytesRead, &sectorBuff[currentByte], toRead);
 			}
@@ -84,13 +80,21 @@ inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool s
 
 		if (currentByte >= dataEnd)
 		{
-			if (singleSector || !PrepareNextSector())
-			{
+		check_next_sector:
+			if (singleSector)
 				return bytesRead;
-			}
+			else if (!PrepareNextSector()) [[unlikely]]
+				goto eof_fill;
 		}
     }
 
+	return bytesRead;
+
+eof_fill:
+	if (dataPtr != nullptr && bytes > 0)
+	{
+		memset(dataPtr + bytesRead, 0, bytes);
+	}
     return bytesRead;
 }
 
@@ -328,7 +332,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 	}
 }
 
-std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoReader* reader) const
+std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoReader* reader)
 {
 	Entry entry;
 
