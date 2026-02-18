@@ -747,8 +747,7 @@ int Main(int argc, char* argv[])
 			global::trackNum++;
 		}
 
-		iso::DIRENTRY& root = entries.front();
-	    iso::DirTreeClass* dirTree = root.subdir.get();
+	    iso::DirTreeClass* dirTree = entries.front().subdir.get();
 
 		if ( !global::LBAfile.empty() )
 		{
@@ -774,12 +773,12 @@ int Main(int argc, char* argv[])
 				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
-					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
+					iso::DirTreeClass tempTree(unrefTracks);
 					for (auto& entry : unrefTracks)
 					{
-						dirTree.entriesInDir.push_back(entry);
+						tempTree.entriesInDir.push_back(entry);
 					}
-					dirTree.OutputLBAlisting( fp, 0 );
+					tempTree.OutputLBAlisting( fp, 0 );
 				}
 
 				fclose( fp );
@@ -807,18 +806,18 @@ int Main(int argc, char* argv[])
 			{
 				dirTree->SortDirectoryEntries(false, true);
 
-				dirTree->OutputHeaderListing( fp, 0 );
+				dirTree->OutputHeaderListing( fp, 0, "<ROOT>" );
 
 				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
-					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
+					iso::DirTreeClass tempTree(unrefTracks);
 					for (auto& entry : unrefTracks)
 					{
-						dirTree.entriesInDir.push_back(entry);
+						tempTree.entriesInDir.push_back(entry);
 					}
 					fprintf( fp, "\n" );
-					dirTree.OutputHeaderListing( fp, 1 );
+					tempTree.OutputHeaderListing( fp, 1, "UNREFERENCED TRACKS" );
 				}
 
 				fprintf( fp, "\n#endif\n" );
@@ -949,10 +948,10 @@ int Main(int argc, char* argv[])
 			}
 
 			// Write directory entries
-			dirTree->WriteDirectoryRecords( &writer, root, global::cdvd_style.value_or(false) ? dirTree->GetDirCountTotal() : 0 );
+			dirTree->WriteDirectoryRecords( &writer );
 
 			// Write file system descriptors to finish the image
-	        iso::WriteDescriptor( &writer, isoIdentifiers, root, totalLenLBA );
+	        dirTree->WriteDescriptor( &writer, isoIdentifiers, totalLenLBA );
 
 			if ( !global::QuietMode )
 			{
