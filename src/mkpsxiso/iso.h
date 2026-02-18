@@ -65,16 +65,12 @@ namespace iso
 	class DirTreeClass
 	{
 	private:
-		// TODO: Once DirTreeClass stores a reference to its own entry, this will be pointless
-		// Same for all 'dir' arguments to methods of this class
-		std::string name;
+		DIRENTRY* m_entry; // Non-owning
 
-		DIRENTRY* entry = nullptr;
-
-		DirTreeClass* parent; // Non-owning
+		DirTreeClass* m_parent; // Non-owning
 		
 		/// Internal function for generating and writing directory records
-		void WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY& dir, const DIRENTRY& parentDir, const int totalDirs) const;
+		void WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* parentDir, const int totalDirs) const;
 
 		/// Internal function for recursive path table generation
 		std::unique_ptr<PathTableClass> GenPathTableSub(unsigned short& index, unsigned short parentIndex) const;
@@ -84,14 +80,14 @@ namespace iso
 		EntryList& entries; // List of all entries on the disc
 		std::vector<std::reference_wrapper<iso::DIRENTRY>> entriesInDir; // References to entries in this directory
 
-		DirTreeClass(EntryList& entries, DirTreeClass* parent = nullptr, std::string name = "<root>");
+		explicit DirTreeClass(EntryList& entries, DIRENTRY* entry = nullptr, DirTreeClass* parent = nullptr);
 		~DirTreeClass();
 
 		static DIRENTRY& CreateRootDirectory(EntryList& entries, const cd::ISO_DATESTAMP& volumeDate, const EntryAttributes& attributes);
 
-		void PrintRecordPath();
+		void PrintRecordPath() const;
 
-		void OutputHeaderListing(FILE* fp, int level) const;
+		void OutputHeaderListing(FILE* fp, const int level, const char* name) const;
 		
 		/** Calculates the length of the directory record to be produced by this class in bytes.
 		 *
@@ -158,10 +154,10 @@ namespace iso
 		 *	have been written to the CD image.
 		 *
 		 *	*writer		   - Pointer to a cd::IsoWriter class that is ready for writing.
-		 *	root		   - Root directory
-		 *  totalDirs	   - Total number of directories. Only usefull for games built with the latest sony mastering tool
 		 */
-		void WriteDirectoryRecords(cd::IsoWriter* writer, const DIRENTRY& root, int totalDirs) const;
+		void WriteDirectoryRecords(cd::IsoWriter* writer) const;
+
+		void WriteDescriptor(cd::IsoWriter* writer, const IDENTIFIERS& id, const int imageLen) const;
 
 		void SortDirectoryEntries(const bool byOrder, const bool byLBA = false);
 
@@ -175,8 +171,6 @@ namespace iso
 	};
 
 	void WriteLicenseData(cd::IsoWriter* writer, void* data, const bool& ps2);
-
-	void WriteDescriptor(cd::IsoWriter* writer, const IDENTIFIERS& id, const DIRENTRY& root, int imageLen);
 
 	const int DA_FILE_PLACEHOLDER_LBA = 0xDEADBEEF;
 
