@@ -29,11 +29,11 @@ void IsoWriter::Close()
 // ======================================================
 
 IsoWriter::SectorView::SectorView(ThreadPool* threadPool, MMappedFile* mappedFile, unsigned int offsetLBA, unsigned int sizeLBA, EdcEccForm edcEccForm)
-	: m_threadPool(threadPool) 
-	, m_view(mappedFile->GetView(static_cast<uint64_t>(offsetLBA) * CD_SECTOR_SIZE, static_cast<size_t>(sizeLBA) * CD_SECTOR_SIZE))
-	, m_currentLBA(offsetLBA)
+	: m_currentLBA(offsetLBA)
 	, m_endLBA(offsetLBA + sizeLBA)
 	, m_edcEccForm(edcEccForm)
+	, m_threadPool(threadPool)
+	, m_view(mappedFile->GetView(static_cast<uint64_t>(offsetLBA) * CD_SECTOR_SIZE, static_cast<size_t>(sizeLBA) * CD_SECTOR_SIZE))
 {
 	m_currentSector = m_view.GetBuffer();
 }
