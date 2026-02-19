@@ -806,57 +806,6 @@ int iso::DirTreeClass::CalculatePathTableLen(const DIRENTRY& dirEntry) const
 	return len;
 }
 
-std::unique_ptr<iso::PathTableClass> iso::DirTreeClass::GenPathTableSub(unsigned short& index, const unsigned short parentIndex) const
-{
-	auto table = std::make_unique<PathTableClass>();
-	std::queue<std::tuple<const DirTreeClass*, unsigned short>> dirsToProcess;
-	dirsToProcess.emplace(this, parentIndex);
-
-	while (!dirsToProcess.empty())
-	{
-		const auto [currentDir, currentParentIndex] = dirsToProcess.front();
-		dirsToProcess.pop();
-
-		for (const auto& e : currentDir->entriesInDir)
-		{
-			const DIRENTRY& entry = e.get();
-			if (entry.type == EntryType::EntryDir)
-			{
-				table->entries.emplace_back(PathEntryClass{
-					entry.id,
-					index++,
-					currentParentIndex,
-					entry.lba
-				});
-
-				dirsToProcess.emplace(entry.subdir.get(), index - 1);
-			}
-		}
-	}
-	return table;
-}
-
-int iso::DirTreeClass::GeneratePathTable(const DIRENTRY& root, unsigned char* buff, bool msb) const
-{
-	unsigned short index = 1;
-
-	// Write out root explicitly (since there is no DirTreeClass including it)
-	PathEntryClass rootEntry;
-	rootEntry.dir_id = root.id;
-	rootEntry.dir_parent_index = index;
-	rootEntry.dir_index = index++;
-	rootEntry.dir_lba = root.lba;
-	rootEntry.sub = GenPathTableSub(index, rootEntry.dir_parent_index);
-
-	PathTableClass pathTable;
-	pathTable.entries.emplace_back(std::move(rootEntry));
-
-	unsigned char* newbuff = pathTable.GenTableData( buff, msb );
-
-	return (int)(newbuff-buff);
-
-}
-
 int iso::DirTreeClass::GetFileCountTotal() const
 {
     int numfiles = 0;
@@ -1038,7 +987,7 @@ void iso::DirTreeClass::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTI
 	const size_t pathTableSize = static_cast<size_t>(F1_DATA_SIZE)*pathTableSectors;
 	auto sectorBuff = std::make_unique<unsigned char[]>(pathTableSize);
 
-	GeneratePathTable( *m_entry, sectorBuff.get(), false );
+	GeneratePathTable( sectorBuff.get(), false );
 	auto lpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
 	lpathTable1->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 	currentHeaderLBA += pathTableSectors;
@@ -1048,7 +997,7 @@ void iso::DirTreeClass::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTI
 	currentHeaderLBA += pathTableSectors;
 
 	// Generate and write M-path table
-	GeneratePathTable( *m_entry, sectorBuff.get(), true );
+	GeneratePathTable( sectorBuff.get(), true );
 	auto mpathTable1 = writer->GetSectorViewM2F1(currentHeaderLBA, pathTableSectors, cd::IsoWriter::EdcEccForm::Form1);
 	mpathTable1->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 	currentHeaderLBA += pathTableSectors;
@@ -1057,9 +1006,55 @@ void iso::DirTreeClass::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTI
 	mpathTable2->WriteMemory(sectorBuff.get(), pathTableSize, setEnd);
 }
 
+int iso::DirTreeClass::GeneratePathTable(unsigned char* buff, bool msb) const
+{
+	unsigned short index = 1;
+	PathTableClass pathTable;
+
+	// Write out root explicitly first
+	pathTable.entries.emplace_back(
+		m_entry->id,
+		index,
+		index, // Self for Root
+		m_entry->lba
+	);
+
+	// Initialize Breadth-First Search Queue
+	std::queue<std::tuple<const DirTreeClass*, unsigned short>> dirsToProcess;
+	dirsToProcess.emplace(this, index++);
+
+	// Process directories using BFS
+	while (!dirsToProcess.empty())
+	{
+		const auto [currentDir, parentIndex] = dirsToProcess.front();
+		dirsToProcess.pop();
+
+		for (const DIRENTRY& entry : currentDir->entriesInDir)
+		{
+			if (entry.type == EntryType::EntryDir)
+			{
+				pathTable.entries.emplace_back(
+					entry.id,
+					index,
+					parentIndex,
+					entry.lba
+				);
+
+				// Queue subdirectories
+				dirsToProcess.emplace(entry.subdir.get(), index++);
+			}
+		}
+	}
+
+	// Generate data buffer
+	const unsigned char* endPtr = pathTable.GenTableData(buff, msb);
+
+	return static_cast<int>(endPtr - buff);
+}
+
 unsigned char* iso::PathTableClass::GenTableData(unsigned char* buff, bool msb)
 {
-	for ( const PathEntryClass& entry : entries )
+	for ( const PathEntry& entry : entries )
 	{
 		const int idLength = MinimumOne(entry.dir_id.length());
 		*buff++ = idLength;	// Directory identifier length
@@ -1086,15 +1081,5 @@ unsigned char* iso::PathTableClass::GenTableData(unsigned char* buff, bool msb)
 		buff += RoundToEven(idLength);
 	}
 
-	for ( const PathEntryClass& entry : entries )
-	{
-		if ( entry.sub != nullptr )
-		{
-			buff = entry.sub->GenTableData( buff, msb );
-		}
-
-	}
-
 	return buff;
-
 }
