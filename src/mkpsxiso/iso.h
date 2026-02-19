@@ -45,21 +45,21 @@ namespace iso
 	// EntryList must have stable references!
 	using EntryList = std::list<DIRENTRY>;
 	
-	class PathEntryClass {
-	public:
-		std::string dir_id;
-		unsigned short dir_index = 0;
-		unsigned short dir_parent_index = 0;
-		int dir_lba = 0;
-		
-		std::unique_ptr<class PathTableClass> sub;
-	};
-	
-	class PathTableClass {
+	class PathTableClass
+	{
+	private:
+		struct PathEntry
+		{
+			std::string dir_id;
+			unsigned short dir_index = 0;
+			unsigned short dir_parent_index = 0;
+			int dir_lba = 0;
+		};
+
 	public:
 		unsigned char* GenTableData(unsigned char* buff, bool msb);
 		
-		std::vector<PathEntryClass> entries;
+		std::vector<PathEntry> entries;
 	};
 
 	class DirTreeClass
@@ -71,9 +71,6 @@ namespace iso
 		
 		/// Internal function for generating and writing directory records
 		void WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* parentDir, const int totalDirs) const;
-
-		/// Internal function for recursive path table generation
-		std::unique_ptr<PathTableClass> GenPathTableSub(unsigned short& index, unsigned short parentIndex) const;
 
 	public:
         static int GetAudioSize(const fs::path& audioFile);
@@ -125,13 +122,12 @@ namespace iso
 
 		/** Generates a path table of all directories and subdirectories within this class' directory record.
 		 *
-		 *  root	- Directory entry of this path
 		 *	*buff	- Pointer to a 2048 byte buffer to generate the path table to.
 		 *	msb		- If true, generates a path table encoded in big-endian format, little-endian otherwise.
 		 *
 		 *	Returns: Length of path table in bytes.
 		 */
-		int GeneratePathTable(const DIRENTRY& root, unsigned char* buff, bool msb) const;
+		int GeneratePathTable(unsigned char* buff, bool msb) const;
 
 		/** Adds a subdirectory to the directory record.
 		 *
