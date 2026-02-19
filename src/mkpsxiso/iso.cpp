@@ -106,7 +106,7 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	{
 		entry.date.year = volumeDate.year % 0x64; // Root overflows dates past 99 for games built with Sony CD-ROM Generator 1.40 and older
 	}
-	entry.length	= 0; // Length is meaningless for directories
+	entry.length	= 0; // We will calculate the length later when all entries have been processed
 	entry.HF		= attributes.HFLAG % 4;
 	entry.attribs	= attributes.XAAttrib;
 	entry.perms		= attributes.XAPerm;
@@ -295,7 +295,7 @@ iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, const fs::p
 	entry.order		= attributes.ORDER;
 	entry.flba		= attributes.FLBA;
 	entry.date		= GetISODateStamp( fileAttrib->st_mtime, attributes.GMTOffs, date );
-	entry.length	= 0; // Length is meaningless for directories
+	entry.length	= 0; // We will calculate the length later when all entries have been processed
 
 	entriesInDir.emplace_back(entry);
 
@@ -327,7 +327,8 @@ int iso::DirTreeClass::CalculateTreeLBA(int lba)
 		// If it is a subdir
 		if (entry.subdir != nullptr)
 		{
-			size = GetSizeInSectors(entry.subdir->CalculateDirEntryLen());
+			entry.length = entry.subdir->CalculateDirEntryLen();
+			size = GetSizeInSectors(entry.length);
 		}
 		else if (entry.type != EntryType::EntryDA)
 		{
@@ -429,14 +430,13 @@ void iso::DirTreeClass::SortDirectoryEntries(const bool byOrder, const bool byLB
 
 void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* parentDir, const int totalDirs) const
 {
-	auto sectorView = writer->GetSectorViewM2F1(m_entry->lba, GetSizeInSectors(CalculateDirEntryLen()), cd::IsoWriter::EdcEccForm::Form1);
+	auto sectorView = writer->GetSectorViewM2F1(m_entry->lba, GetSizeInSectors(m_entry->length), cd::IsoWriter::EdcEccForm::Form1);
 
 	auto writeOneEntry = [&sectorView, totalDirs](const DIRENTRY& entry, std::optional<bool> currentOrParent = std::nullopt) -> void
 	{
 		std::byte buffer[128] {};
 
 		auto dirEntry = reinterpret_cast<cd::ISO_DIR_ENTRY*>(buffer);
-		int entryLength = sizeof(*dirEntry);
 
 		if ( entry.type == EntryType::EntryDir )
 		{
@@ -464,7 +464,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 		}
 		else if (entry.type == EntryType::EntryDir)
 		{
-			length = F1_DATA_SIZE * GetSizeInSectors(entry.subdir->CalculateDirEntryLen());
+			length = F1_DATA_SIZE * GetSizeInSectors(entry.length);
 		}
 		else
 		{
@@ -489,7 +489,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 			dirEntry->identifierLen = 1;
 			identifierBuffer[0] = currentOrParent.value() ? '\1' : '\0';
 		}
-		entryLength += dirEntry->identifierLen;
+		int entryLength = sizeof(*dirEntry) + dirEntry->identifierLen;
 		entryLength = RoundToEven(entryLength);
 
 		if ( !global::noXA )
@@ -950,7 +950,7 @@ void iso::DirTreeClass::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTI
 	isoDescriptor.rootDirRecord.entryLength = 34;
 	isoDescriptor.rootDirRecord.extLength	= 0;
 	isoDescriptor.rootDirRecord.entryOffs = SetPair32( 18+(pathTableSectors*4) );
-	isoDescriptor.rootDirRecord.entrySize = SetPair32( GetSizeInSectors(CalculateDirEntryLen())*F1_DATA_SIZE );
+	isoDescriptor.rootDirRecord.entrySize = SetPair32( GetSizeInSectors(m_entry->length)*F1_DATA_SIZE );
 	isoDescriptor.rootDirRecord.flags = 0x02 | m_entry->HF;
 	isoDescriptor.rootDirRecord.volSeqNum = SetPair16( 1 );
 	isoDescriptor.rootDirRecord.identifierLen = 1;
