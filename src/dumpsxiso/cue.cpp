@@ -1,7 +1,7 @@
 #include "cue.h"
 #include "platform.h"
 
-bool multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &entry, cd::IsoReader &reader, const CueFile &cueFile)
+bool cue::multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &entry, cd::IsoReader &reader, const CueFile &cueFile)
 {
 	int trackIndex = (entry.trackid.empty() ? std::stoi(entry.identifier.substr(6, 2)) : std::stoi(entry.trackid)) - 1;
 	if (trackIndex < 1 || trackIndex >= static_cast<int>(cueFile.tracks.size()))
@@ -13,7 +13,7 @@ bool multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &e
 	return reader.SeekToSector(sector - cueFile.tracks[trackIndex - 1].endSector);
 }
 
-CueFile parseCueFile(fs::path& inputFile)
+cue::CueFile cue::parseCueFile(fs::path& inputFile)
 {
 	CueFile cueFile;
 	std::string fileType;
