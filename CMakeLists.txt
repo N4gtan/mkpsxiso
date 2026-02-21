@@ -104,6 +104,7 @@ add_executable(dumpsxiso
 	${dumpsxiso_dir}/cdreader.cpp
 	${dumpsxiso_dir}/cue.cpp
 	${dumpsxiso_dir}/main.cpp
+	${dumpsxiso_dir}/xmlwriter.cpp
 )
 target_link_libraries(dumpsxiso iso_shared)
 if(NOT MKPSXISO_NO_LIBFLAC)
