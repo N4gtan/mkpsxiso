@@ -270,16 +270,6 @@ iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, const fs::p
 	if (!fileAttrib.has_value())
 	{
 		fileAttrib.emplace().st_mtime = global::BuildTime;
-	
-		if ( !global::noWarns )
-		{
-			if ( !global::QuietMode )
-			{
-				printf( "\n    " );
-			}
-
-			printf( "WARNING: 'source' attribute for subdirectory '%s' is invalid or empty.\n", id.c_str() );
-		}
 	}
 
 	DIRENTRY& entry = entries.emplace_back();
