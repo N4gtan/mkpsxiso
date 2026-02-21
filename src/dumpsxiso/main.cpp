@@ -54,7 +54,7 @@ namespace param {
 
 namespace global
 {
-	CueFile cueFile;
+	cue::CueFile cueFile;
 	bool ps2 = false;
 	bool xa_edc = true;
 	std::string licenseFile;
@@ -1092,7 +1092,7 @@ int Main(int argc, char *argv[])
 
 	if (CompareICase(param::isoFile.extension().string(), ".cue"))
 	{
-		global::cueFile = parseCueFile(param::isoFile);
+		global::cueFile = cue::parseCueFile(param::isoFile);
 	}
 
 	cd::IsoReader& reader = *(cd::reader = std::make_unique<cd::IsoReader>());
