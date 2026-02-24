@@ -98,6 +98,10 @@ On Windows browsing the subdirectories in 'dirb' and 'dirc' will not list the co
 
 This can be avoided by minimizing identically named directories but its best to test your generated disc image before considering it ready for release.
 
+## Documentation
+The official documentation explains how to use this tool in detail. If you have an issue, it's best to first reference the documentation before opening an issue.
+
+[MKPSXISO Documentation](https://github.com/Lameguy64/mkpsxiso/wiki/MKPSXISO-Documentation)
 
 ## Changelog
 
@@ -302,3 +306,4 @@ This can be avoided by minimizing identically named directories but its best to 
 
 **Version 1.00 (8/6/2016)**
 * Initial release.
+
