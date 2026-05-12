@@ -32,7 +32,7 @@ namespace global
 };
 
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs);
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs, const fs::path& currentPath);
 int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
@@ -284,6 +284,11 @@ int Main(int argc, char* argv[])
 		{
 			tinyxml2::XMLElement *scanElm = toscan.front();
 			toscan.pop();
+			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr && scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+			{
+				scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
+				scanElm->DeleteAttribute("srcdir");
+			}
 			if(CompareICase(scanElm->Name(), xml::elem::FILE))
 			{
 				if(scanElm->Attribute(xml::attrib::ENTRY_TYPE, "da"))
@@ -581,7 +586,8 @@ int Main(int argc, char* argv[])
 				}
 
 				// Write track information to the CUE sheet
-				if ( const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE); trackRelativeSource == nullptr || *trackRelativeSource == 0 )
+				const char* trackRelativeSource = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
+				if ( trackRelativeSource == nullptr || *trackRelativeSource == 0 )
 				{
 					if ( !global::QuietMode )
 					{
@@ -593,79 +599,77 @@ int Main(int argc, char* argv[])
 
 					return EXIT_FAILURE;
 				}
-				else
+
+				fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
+				if ( cuefp )
 				{
-					fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
-					if ( cuefp )
-					{
-						fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
-					}
+					fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
+				}
 
-					// pregap
-					int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
-					const tinyxml2::XMLElement *pregapElement = trackElement->FirstChildElement(xml::elem::TRACK_PREGAP);
-					if(pregapElement != nullptr)
+				// pregap
+				int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
+				const tinyxml2::XMLElement *pregapElement = trackElement->FirstChildElement(xml::elem::TRACK_PREGAP);
+				if(pregapElement != nullptr)
+				{
+					const char *duration = pregapElement->Attribute(xml::attrib::PREGAP_DURATION);
+					if(duration != nullptr)
 					{
-						const char *duration = pregapElement->Attribute(xml::attrib::PREGAP_DURATION);
-						if(duration != nullptr)
+						pregapSectors = TimecodeToSectors(duration);
+						if(pregapSectors < 0)
 						{
-							pregapSectors = TimecodeToSectors(duration);
-							if(pregapSectors < 0)
-							{
-								printf( "ERROR: %s duration has invalid MM:SS:FF "
-									"for track on line %d.\n", xml::elem::TRACK_PREGAP, pregapElement->GetLineNum() );
-								return EXIT_FAILURE;
-							}
-
-							if(pregapSectors > (80 * 60 * 75) && !global::noWarns)
-							{
-								printf( "WARNING: Duration > 80 minutes\n");
-							}
-						}
-					}
-					if(pregapSectors > 0)
-					{
-						if ( cuefp )
-						{
-							fprintf( cuefp.get(), "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str());
-						}
-
-						audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
-						totalLenLBA += pregapSectors;
-					}
-
-					if ( cuefp )
-					{
-						fprintf( cuefp.get(), "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str());
-					}
-
-					const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
-					audioTracks.emplace_back(totalLenLBA, audioSize, trackSource.string());
-
-					const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
-					if(trackid != nullptr)
-					{
-						if(!UpdateDAFilesWithLBA(entries, trackid, totalLenLBA))
-						{
+							printf( "ERROR: %s duration has invalid MM:SS:FF "
+								"for track on line %d.\n", xml::elem::TRACK_PREGAP, pregapElement->GetLineNum() );
 							return EXIT_FAILURE;
 						}
-					}
-					else
-					{
-						auto& entry = unrefTracks.emplace_back();
-						entry.id = trackSource.stem().string() + ";1";
-						entry.length = audioSize;
-						entry.lba = totalLenLBA;
-						entry.srcfile = trackSource;
-						entry.type = EntryType::EntryDA;
-						if (!global::QuietMode)
+
+						if(pregapSectors > (80 * 60 * 75) && !global::noWarns)
 						{
-							printf("    DA File \"%s\"\n", trackSource.filename().string().c_str());
+							printf( "WARNING: Duration > 80 minutes\n");
 						}
 					}
-
-					totalLenLBA += audioSize/CD_SECTOR_SIZE;
 				}
+				if(pregapSectors > 0)
+				{
+					if ( cuefp )
+					{
+						fprintf( cuefp.get(), "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str());
+					}
+
+					audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
+					totalLenLBA += pregapSectors;
+				}
+
+				if ( cuefp )
+				{
+					fprintf( cuefp.get(), "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str());
+				}
+
+				const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
+				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource.string());
+
+				const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
+				if(trackid != nullptr)
+				{
+					if(!UpdateDAFilesWithLBA(entries, trackid, totalLenLBA))
+					{
+						return EXIT_FAILURE;
+					}
+				}
+				else
+				{
+					auto& entry = unrefTracks.emplace_back();
+					entry.id = trackSource.stem().string() + ";1";
+					entry.length = audioSize;
+					entry.lba = totalLenLBA;
+					entry.srcfile = trackSource;
+					entry.type = EntryType::EntryDA;
+					if (!global::QuietMode)
+					{
+						printf("    DA File \"%s\"\n", trackSource.filename().string().c_str());
+					}
+				}
+
+				totalLenLBA += audioSize/CD_SECTOR_SIZE;
 
 				if ( !global::QuietMode )
 				{
@@ -1198,6 +1202,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		isoIdentifiers.CreationDate = dateBuffer;
 	}
 
+	// Establish default entry attributes from XML (if any)
+	const EntryAttributes defaultAttributes = ReadEntryAttributes(EntryAttributes{}, trackElement->FirstChildElement(xml::elem::DEFAULT_ATTRIBUTES));
+
 	// Parse directory entries in the directory_tree element
 	if ( !global::QuietMode )
 	{
@@ -1216,12 +1223,15 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		return false;
 	}
 
-	const EntryAttributes defaultAttributes = ReadEntryAttributes(EntryAttributes{}, trackElement->FirstChildElement(xml::elem::DEFAULT_ATTRIBUTES));
+	const char* dirTreePath = directoryTree->Attribute(xml::attrib::ENTRY_SOURCE);
+	fs::path currentPath = dirTreePath != nullptr && *dirTreePath != 0
+		? (xmlPath / dirTreePath).lexically_normal()
+		: xmlPath;
 
 	iso::DIRENTRY& root = iso::DirTreeClass::CreateRootDirectory(entries, volumeDate, ReadEntryAttributes(defaultAttributes, directoryTree));
 	iso::DirTreeClass* dirTree = root.subdir.get();
 
-	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes) )
+	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes, currentPath) )
 	{
 		return false;
 	}
@@ -1250,7 +1260,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 	return true;
 }
 
-static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	const char* nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME);
 	const char* sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE);
@@ -1286,7 +1296,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	else
 	{
 		name = nameElement;
-		srcFile = xmlPath / name;
+		srcFile = currentPath / name;
 	}
 
 	{ // ECMA-119 7.5.1 - File Identifier shall contain one dot and uppercase alphanumeric characters or underscores.
@@ -1410,10 +1420,13 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			sourceElement = trackElement->Attribute(xml::attrib::TRACK_SOURCE);
 			if(sourceElement == nullptr || *sourceElement == 0)
 			{
-				printf( "ERROR: <%s %s=\"audio\" %s=\"%s\"> must have source\n", xml::elem::TRACK, xml::attrib::TRACK_TYPE, xml::attrib::TRACK_ID, trackid);
-				return false;
+				// Safe cast, the root object is mutable. Casting here to modify the attribute without refactoring the entire call chain.
+				const_cast<tinyxml2::XMLElement*>(trackElement)->SetAttribute(xml::attrib::ENTRY_SOURCE, srcFile.string().c_str());
 			}
-			srcFile = (xmlPath / sourceElement).lexically_normal();
+			else
+			{
+				srcFile = (xmlPath / sourceElement).lexically_normal();
+			}
 		}
 		else
 		{
@@ -1445,7 +1458,7 @@ static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLEleme
 	return true;
 }
 
-static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	fs::path srcDir;
 	std::string name;
@@ -1457,6 +1470,10 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 	if (const char *nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME); nameElement != nullptr && *nameElement != 0)
 	{
 		name = nameElement;
+		if (srcDir.empty())
+		{
+			srcDir = currentPath / name;
+		}
 	}
 	else if (!srcDir.empty())
 	{
@@ -1514,24 +1531,24 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		std::move(name), std::move(srcDir), ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
 
 	if ( subdir == nullptr )
 	{
 		return false;
 	}
 
-	return ParseDirectory(subdir, dirElement, xmlPath, defaultAttributes);
+	return ParseDirectory(subdir, dirElement, xmlPath, defaultAttributes, srcDir);
 }
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes)
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	for ( const tinyxml2::XMLElement* dirElement = parentElement->FirstChildElement(); dirElement != nullptr; dirElement = dirElement->NextSiblingElement() )
 	{
 		
 		if ( CompareICase( "file", dirElement->Name() ))
 		{
-			if (!ParseFileEntry(dirTree, dirElement, xmlPath, defaultAttributes))
+			if (!ParseFileEntry(dirTree, dirElement, xmlPath, defaultAttributes, currentPath))
 			{
 				return false;
 			}
@@ -1545,7 +1562,7 @@ bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* pare
         }
 		else if ( CompareICase( "dir", dirElement->Name() ))
 		{
-			if (!ParseDirEntry(dirTree, dirElement, xmlPath, defaultAttributes))
+			if (!ParseDirEntry(dirTree, dirElement, xmlPath, defaultAttributes, currentPath))
 			{
 				return false;
 			}
