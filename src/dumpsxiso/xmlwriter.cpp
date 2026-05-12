@@ -163,7 +163,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			newelement->SetAttribute(xml::attrib::ENTRY_NAME, entry.identifier.c_str());
 			if (param::lba)
 			{
-				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
+				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
 			}
 			if (!param::dir)
@@ -190,12 +190,12 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 	else
 	{
 		newelement = dirElement->InsertNewChildElement("file");
-		newelement->SetAttribute(xml::attrib::ENTRY_NAME, CleanIdentifier(entry.identifier).c_str());
+		newelement->SetAttribute(xml::attrib::ENTRY_NAME, entry.identifier.c_str());
 		if(entry.type != EntryType::EntryDA)
 		{
 			if (param::lba)
 			{
-				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
+				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
 			}
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");
@@ -435,7 +435,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	{
 		// SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
 		unsigned pregap_sectors = 150;
-		dafile->virtualPath = GetEncodedDAPath(srcPath / dafile->virtualPath / CleanIdentifier(dafile->identifier));
+		dafile->virtualPath = GetEncodedDAPath(srcPath / dafile->virtualPath / dafile->identifier);
 		if(dafile->entry.entryOffs.lsb != currentLBA)
 		{
 			pregap_sectors = dafile->entry.entryOffs.lsb - currentLBA;
