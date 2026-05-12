@@ -4,6 +4,7 @@
 
 namespace param
 {
+	extern bool dir;
 	extern bool lba;
 	extern fs::path outPath;
 	extern fs::path xmlFile;
@@ -165,7 +166,10 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
 			}
-			newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
+			if (!param::dir)
+			{
+				newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
+			}
 		}
 		else
 		{
@@ -201,9 +205,15 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			newelement->SetAttribute(xml::attrib::TRACK_ID, entry.trackid.c_str());
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, "da");
 		}
-		newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
+		if (!param::dir)
+		{
+			newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
+		}
 	}
-	WriteOptionalXMLAttribs(newelement, entry, attributeCounters);
+	if (!param::dir)
+	{
+		WriteOptionalXMLAttribs(newelement, entry, attributeCounters);
+	}
 	return dirElement;
 }
 
@@ -398,7 +408,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	}
 
 	// Create <default_attributes> now so it lands before the directory tree
-	tinyxml2::XMLElement* defaultAttributesElement = trackElement->InsertNewChildElement(xml::elem::DEFAULT_ATTRIBUTES);
+	tinyxml2::XMLElement* defaultAttributesElement = !param::dir ? trackElement->InsertNewChildElement(xml::elem::DEFAULT_ATTRIBUTES) : nullptr;
 
 	EntryAttributeCounters attributeCounters;
 	unsigned currentLBA = descriptor.rootDirRecord.entryOffs.lsb;
@@ -412,8 +422,11 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 		WriteXMLByLBA(rootDir->dirEntryList.GetUnderlyingList(), trackElement, srcPath, currentLBA, attributeCounters, postGap);
 	}
 
-	tinyxml2::XMLElement *dirtree = trackElement->FirstChildElement(xml::elem::DIRECTORY_TREE);
-	SimplifyDefaultXMLAttributes(dirtree, EstablishXMLAttributeDefaults(defaultAttributesElement, attributeCounters));
+	if (defaultAttributesElement != nullptr)
+	{
+		tinyxml2::XMLElement *dirtree = trackElement->FirstChildElement(xml::elem::DIRECTORY_TREE);
+		SimplifyDefaultXMLAttributes(dirtree, EstablishXMLAttributeDefaults(defaultAttributesElement, attributeCounters));
+	}
 
 	// Write CD-DA tracks
 	tinyxml2::XMLNode *modifyProject = trackElement->Parent();

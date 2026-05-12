@@ -41,6 +41,7 @@ namespace param {
     fs::path isoFile;
     fs::path outPath;
     fs::path xmlFile;
+	bool dir = false;
 	bool lba = false;
 	bool raw = false;
 	bool force = false;
@@ -58,7 +59,7 @@ namespace global
 	bool ps2 = false;
 	bool xa_edc = true;
 	std::string licenseFile;
-	std::optional<bool> cdvd_style;
+	std::optional<bool> cdvd_style = false;
 }
 
 fs::path GetEncodedDAPath(const fs::path& inputPath)
@@ -762,6 +763,144 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 	}
 }
 
+void ParseDIR()
+{
+	// Limits of LIBCD.H from PSYQ Run-time Library 3.3 and onwards; bypassing these will crash CdSearchFile().
+	constexpr int CdlMAXFILE  = 64;	/* max number of files in a directory */
+	constexpr int CdlMAXDIR	  = 128;/* max number of total directories */
+	constexpr int CdlMAXLEVEL = 8;	/* max levels of directories */
+	// These limits assume ISO Level 1 names (8.3), representing internal buffer capacities:
+	// 64  = ((2048 - 96) / 60) * 2; 2 directory record sectors for files (96 bytes for "." & ".." overhead, 60 bytes max entry size).
+	// 128 = (2048 / 16) * 1;		 1 path table sector for directories (16 bytes max average entry, including the root entry).
+	// So, using names longer than 8.3 will decrease this limit even further.
+
+	int postGap	 = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, postgap should be always >= 150 sectors.
+	int dirCount = CdlMAXDIR - 1; // Reserve one for root
+	auto ParseSubDIR = [&](auto &&self, ListView<cd::IsoDirEntries::Entry> view, const fs::path &path, int fileCount, int level) -> std::unique_ptr<cd::IsoDirEntries>
+	{
+		if (level > CdlMAXLEVEL)
+		{
+			printf("\nERROR: Exceeded maximum directory hierarchy depth levels (%d) at \"%s\"\n", CdlMAXLEVEL, path.string().c_str());
+			exit(EXIT_FAILURE);
+		}
+
+		auto dirEntries = std::make_unique<cd::IsoDirEntries>(std::move(view));
+
+		std::error_code ec;
+		auto iterator = fs::directory_iterator(path, ec);
+		if (ec)
+		{
+			printf("\nERROR: Cannot read directory \"%s\". %s\n", path.string().c_str(), ec.message().c_str());
+			exit(EXIT_FAILURE);
+		}
+
+		for (const auto &fsEntry : iterator)
+		{
+			auto &entry = dirEntries->dirEntryList.EmplaceBack(cd::IsoDirEntries::Entry
+			{
+				.identifier  = fsEntry.path().filename().string(),
+				.virtualPath = (path == param::outPath) ? fs::path() : path.lexically_proximate(param::outPath),
+				.type		 = EntryType::EntryFile
+			});
+
+			if (level == 1 && entry.identifier.length() >= 7)
+			{
+				if (entry.identifier.length() == 10 && CompareICase(entry.identifier, "SYSTEM.CNF"))
+				{
+					dirEntries->dirEntryList.RotateBack();
+				}
+				else if (CompareICase(entry.identifier.substr(0, 7), "license"))
+				{
+					global::licenseFile = entry.identifier;
+					dirEntries->dirEntryList.PopBack();
+					continue;
+				}
+			}
+
+			if (fsEntry.is_directory())
+			{
+				if (--dirCount == -1)
+				{
+					printf("\nWARNING: Exceeded maximum directories (%d) for LIBCD CdSearchFile() at \"%s\"\n", CdlMAXDIR, path.string().c_str());
+					exit(EXIT_FAILURE);
+				}
+				entry.type	 = EntryType::EntryDir;
+				entry.subdir = self(self, dirEntries->dirEntryList.NewView(), fsEntry.path(), CdlMAXFILE, level + 1);
+			}
+			else
+			{
+				if (--fileCount == -1)
+				{
+					printf("\nWARNING: Exceeded maximum files per directory (%d) for LIBCD CdSearchFile() at \"%s\"\n", CdlMAXFILE, path.string().c_str());
+					exit(EXIT_FAILURE);
+				}
+				if (std::string ext = fsEntry.path().extension().string(); CompareICase(ext, ".xa") || CompareICase(ext, ".str"))
+				{
+					entry.type = EntryType::EntryXA;
+				}
+				else if (CompareICase(ext, ".wav") || CompareICase(ext, ".flac") || CompareICase(ext, ".pcm") || CompareICase(ext, ".mp3"))
+				{
+					entry.type = EntryType::EntryDA;
+					entry.entry.entryOffs.lsb = ++postGap; // Do not change. Used only to avoid calculating deltas at XML write time
+				}
+			}
+		}
+		return dirEntries;
+	};
+
+	// Create descriptors
+	cd::ISO_DESCRIPTOR descriptor{};
+	memcpy(&descriptor.volumeID, 			  "MKPSXISO",	 sizeof("MKPSXISO"));
+	memcpy(&descriptor.systemID, 			  "PLAYSTATION", sizeof("PLAYSTATION"));
+	memcpy(&descriptor.applicationIdentifier, "PLAYSTATION", sizeof("PLAYSTATION"));
+
+	if (!param::QuietMode)
+		printf("\nParsing directory \"%s\"... Done.\n", param::outPath.string().c_str());
+
+	// Create root
+	std::list<cd::IsoDirEntries::Entry> entries;
+	auto rootDir = std::make_unique<cd::IsoDirEntries>(std::move(ListView(entries)));
+	auto &entry  = rootDir->dirEntryList.EmplaceBack(cd::IsoDirEntries::Entry{.type	= EntryType::EntryDir});
+
+	// Parse directory recursively
+	entry.subdir = ParseSubDIR(ParseSubDIR, rootDir->dirEntryList.NewView(), param::outPath, CdlMAXFILE, 1);
+
+	// Filter DA files
+	auto DAfiles = ParseDAfiles(*cd::reader, entries);
+
+	if (!param::QuietMode)
+		printf("Creating XML document... ");
+
+	// Write XML sorted by directories
+	param::outputSortedByDir  = true;
+	xml::WriteXML(descriptor, rootDir, DAfiles, postGap - DAfiles.size());
+	if (!param::QuietMode)
+	{
+		printf("Done.\n");
+
+		printf( "\n\n----------------------------------------------------\n"
+				"Files in the root directory starting with \"license\"\n"
+				"are assumed to be disc licenses.\n\n"
+				"Files with extension .xa or .str\n"
+				"are assumed to be interleaved files.\n\n"
+				"Files with extension .wav, .flac, .pcm, or .mp3\n"
+				"are assumed to be DA files.\n"
+				"----------------------------------------------------\n\n\n"
+				"IMPORTANT: XML entry order determines the final LBA.\n"
+				"----------------------------------------------------\n"
+				"Place the BOOT executable (from SYSTEM.CNF)\n"
+				"immediately after the SYSTEM.CNF entry.\n" );
+		if (!DAfiles.empty())
+		{
+			printf("\nPlace DA files at the end of directory_tree,\n"
+				   "immediately after the last DUMMY entry.\n");
+		}
+		printf( "----------------------------------------------------\n" );
+		printf( "Press Enter to continue..." );
+		getchar();
+	}
+}
+
 void ParseISO(cd::IsoReader& reader) {
 
     cd::ISO_DESCRIPTOR descriptor;
@@ -803,7 +942,7 @@ void ParseISO(cd::IsoReader& reader) {
 	if (pathTable.pathTableList[0].entry.dirOffs != descriptor.rootDirRecord.entryOffs.lsb)
 	{
 		printf("\nERROR: Root directory offset in path table does not match the one in volume descriptor.\n"
-				 "       The ISO image may be corrupted or invalid.\n");
+				 "       The ISO image may be corrupt or invalid.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -934,8 +1073,8 @@ void ParseISO(cd::IsoReader& reader) {
 int Main(int argc, char *argv[])
 {
 	static constexpr const char* HELP_TEXT =
-		"Usage: dumpsxiso [options <file>] <isofile>\n\n"
-		"  <isofile>\t\tFile name of the bin/cue file (supports any 2352 byte/sector images)\n\n"
+		"Usage: dumpsxiso [options] <input>\n\n"
+		"  <input>\t\tAny 2352-sector disc image/cue to extract, or a directory to generate an XML project.\n\n"
 		"Options:\n"
 		"  -h|--help\t\tShows this help text\n"
 		"  -q|--quiet\t\tQuiet mode (suppress all but warnings and errors)\n"
@@ -1075,6 +1214,12 @@ int Main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	// PowerShell tab-completion adds a trailing slash to directories, breaking fs::path::stem. Idk who thought this was a good idea...
+	if (!param::isoFile.has_filename() && param::isoFile.has_parent_path())
+	{
+		param::isoFile = param::isoFile.parent_path();
+	}
+
 	if (!param::QuietMode)
 	{
 		printf(VERSION_TEXT);
@@ -1085,17 +1230,25 @@ int Main(int argc, char *argv[])
 		param::outPath = param::isoFile.stem();
 	}
 
-	if (param::xmlFile.empty())
+	if (param::xmlFile.empty() || fs::is_directory(param::xmlFile))
 	{
-		param::xmlFile = param::outPath.stem() += ".xml";
+		(param::xmlFile /= param::outPath.filename()) += ".xml";
+	}
+
+	cd::IsoReader& reader = *(cd::reader = std::make_unique<cd::IsoReader>());
+
+	if (fs::is_directory(param::isoFile))
+	{
+		param::dir = true;
+		param::outPath = param::isoFile;
+		ParseDIR();
+		return EXIT_SUCCESS;
 	}
 
 	if (CompareICase(param::isoFile.extension().string(), ".cue"))
 	{
 		global::cueFile = cue::parseCueFile(param::isoFile);
 	}
-
-	cd::IsoReader& reader = *(cd::reader = std::make_unique<cd::IsoReader>());
 
 	if (!reader.Open(param::isoFile)) {
 

@@ -62,8 +62,8 @@ bool UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const un
 int Main(int argc, char* argv[])
 {
 	static constexpr const char* HELP_TEXT =
-		"Usage: mkpsxiso [options <file>] <xmlfile>\n\n"
-		"  <xmlfile>\t\tFile name of disc image project in XML document format\n\n"
+		"Usage: mkpsxiso [options] <input>\n\n"
+		"  <input>\t\tAny XML project file defining the disc layout to build.\n\n"
 		"Options:\n"
 		"  -h|--help\t\tShows this help text\n"
 		"  -q|--quiet\t\tQuiet mode (suppress all but warnings and errors)\n"
@@ -1235,7 +1235,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		volumeDate.hour = imageTime.tm_hour;
 		volumeDate.minute = imageTime.tm_min;
 		volumeDate.second = imageTime.tm_sec;
-		volumeDate.GMToffs = static_cast<signed char>(-SYSTEM_TIMEZONE / 60 / 15); // Seconds to 15-minute units
+		volumeDate.GMToffs = 36; // Use Japan GMT
 
 		// Convert ISO_DATESTAMP to ISO_LONG_DATESTAMP char*
 		static const std::string creationDate = DateToString(volumeDate, true);
