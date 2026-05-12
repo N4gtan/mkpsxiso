@@ -908,6 +908,7 @@ tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry, tinyx
 				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
 			}
+			newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
 		}
 		else
 		{
@@ -936,13 +937,14 @@ tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry, tinyx
 				const fs::path outputPath = sourcePath / entry.virtualPath / CleanIdentifier(entry.identifier);
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
 			}
-			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");	
+			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");
 		}
 		else
 		{
 			newelement->SetAttribute(xml::attrib::TRACK_ID, entry.trackid.c_str());
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, "da");
 		}
+		newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
 	}
 	WriteOptionalXMLAttribs(newelement, entry, entry.type, attributeCounters);
 	return dirElement;

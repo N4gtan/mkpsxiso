@@ -1173,14 +1173,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	// Establish the volume timestamp to either the current local time or isoIdentifiers.CreationDate (if specified)
 	cd::ISO_DATESTAMP volumeDate;
-	bool gotDateFromXML = false;
-	if ( isoIdentifiers.CreationDate != nullptr )
-	{
-		// Try to use time from XML. If it's malformed, fall back to local time.
-		volumeDate = GetDateFromString(isoIdentifiers.CreationDate, &gotDateFromXML);
-	}
-
-	if ( !gotDateFromXML )
+	// Try to use time from XML. If it's malformed, fall back to local time.
+	if ( !ParseDateFromString(volumeDate, isoIdentifiers.CreationDate) )
 	{
 		// Use local time
 		const tm imageTime = *localtime( &global::BuildTime );
@@ -1194,12 +1188,8 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		volumeDate.GMToffs = static_cast<signed char>(-SYSTEM_TIMEZONE / 60 / 15); // Seconds to 15-minute units
 
 		// Convert ISO_DATESTAMP to ISO_LONG_DATESTAMP char*
-		static char dateBuffer[20];
-		snprintf(dateBuffer, sizeof(dateBuffer), "%04u%02hhu%02hhu%02hhu%02hhu%02hhu00%+hhd",
-				volumeDate.year + 1900, volumeDate.month, volumeDate.day,
-				volumeDate.hour, volumeDate.minute, volumeDate.second, volumeDate.GMToffs);
-
-		isoIdentifiers.CreationDate = dateBuffer;
+		static const std::string creationDate = DateToString(volumeDate, true);
+		isoIdentifiers.CreationDate = creationDate.c_str();
 	}
 
 	// Establish default entry attributes from XML (if any)
@@ -1443,7 +1433,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 	}
 
-	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid);
+	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid, dirElement->Attribute(xml::attrib::ENTRY_DATE));
 }
 
 static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
@@ -1531,7 +1521,7 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 
 	bool alreadyExists = false;
 	iso::DirTreeClass* subdir = dirTree->AddSubDirEntry(
-		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists );
+		std::move(name), srcDir, ReadEntryAttributes(defaultAttributes, dirElement), alreadyExists, dirElement->Attribute(xml::attrib::ENTRY_DATE) );
 
 	if ( subdir == nullptr )
 	{

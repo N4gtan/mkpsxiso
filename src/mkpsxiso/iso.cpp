@@ -22,8 +22,12 @@ static const int RoundToEven(const int val)
 	return (val + 1) & -2;
 }
 
-static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
+static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs, const char* date)
 {
+	cd::ISO_DATESTAMP result;
+	if (ParseDateFromString(result, date, GMToffs))
+		return result;
+
 	tm* timestamp;
 	if (global::new_type.has_value()) {
 		timestamp = CustomLocalTime(&time);
@@ -35,7 +39,6 @@ static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs)
 		timestamp = gmtime( &time );
 	}
 
-	cd::ISO_DATESTAMP result{.month = 1, .day = 1, .GMToffs = GMToffs};
 	if (timestamp != nullptr)
 	{
 		result.year		= timestamp->tm_year;
@@ -107,7 +110,7 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	return entries.back();
 }
 
-bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path srcfile, const EntryAttributes& attributes, const char *trackid)
+bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path srcfile, const EntryAttributes& attributes, const char *trackid, const char* date)
 {
 	auto fileAttrib = Stat(srcfile);
     if ( !fileAttrib )
@@ -208,6 +211,7 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 	entry.order		= attributes.ORDER;
 	entry.flba		= attributes.FLBA;
 	entry.srcfile	= std::move(srcfile);
+	entry.date		= GetISODateStamp( fileAttrib->st_mtime, attributes.GMTOffs, date );
 
 	if ( type == EntryType::EntryDA )
 	{
@@ -218,8 +222,6 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 	{
 		entry.length = fileAttrib->st_size;
 	}
-
-    entry.date = GetISODateStamp( fileAttrib->st_mtime, attributes.GMTOffs );
 
 	entries.emplace_back(std::move(entry));
 	entriesInDir.emplace_back(entries.back());
@@ -244,7 +246,7 @@ void iso::DirTreeClass::AddDummyEntry(const unsigned int sectors, const unsigned
 	entriesInDir.emplace_back(entries.back());
 }
 
-iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, const fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists)
+iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, const fs::path& srcDir, const EntryAttributes& attributes, bool& alreadyExists, const char* date)
 {
 	// Duplicate directory entries are allowed, but the subsequent occurences will not add
 	// a new directory to 'entries'.
@@ -288,7 +290,7 @@ iso::DirTreeClass* iso::DirTreeClass::AddSubDirEntry(std::string id, const fs::p
 	entry.UID		= attributes.UID;
 	entry.order		= attributes.ORDER;
 	entry.flba		= attributes.FLBA;
-	entry.date		= GetISODateStamp( fileAttrib->st_mtime, attributes.GMTOffs );
+	entry.date		= GetISODateStamp( fileAttrib->st_mtime, attributes.GMTOffs, date );
 	entry.length	= 0; // Length is meaningless for directories
 
 	entries.emplace_back(std::move(entry));
@@ -1032,8 +1034,8 @@ void iso::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTIFIERS& id, con
 	CopyStringPadWithSpaces( isoDescriptor.abstractFileIdentifier, nullptr );
 	CopyStringPadWithSpaces( isoDescriptor.bibliographicFilelIdentifier, nullptr );
 
-	isoDescriptor.volumeCreateDate = GetLongDateFromString(id.CreationDate);
-	isoDescriptor.volumeModifyDate = GetLongDateFromString(id.ModificationDate);
+	ParseLongDateFromString( isoDescriptor.volumeCreateDate, id.CreationDate );
+	ParseLongDateFromString( isoDescriptor.volumeModifyDate, id.ModificationDate );
 	isoDescriptor.volumeEffectiveDate = isoDescriptor.volumeExpiryDate = GetUnspecifiedLongDate();
 	isoDescriptor.fileStructVersion = 1;
 
