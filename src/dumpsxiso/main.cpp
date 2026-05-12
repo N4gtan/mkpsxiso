@@ -319,7 +319,7 @@ std::unique_ptr<cd::IsoDirEntries> ParseSubdirectory(cd::IsoReader& reader, List
         if (entry.entry.flags & 0x2)
 		{
             entry.subdir = ParseSubdirectory(reader, dirEntries->dirEntryList.NewView(), entry.entry.entryOffs.lsb, GetSizeInSectors(entry.entry.entrySize.lsb),
-				path / CleanIdentifier(entry.identifier));
+				path / entry.identifier);
         }
     }
 
@@ -446,7 +446,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			auto& entry = unrefDAbuff.emplace_back();
 			entry.entry.entryOffs.lsb = track.startSector;
 			entry.entry.entrySize.lsb = track.sizeInSectors * F1_DATA_SIZE;
-			entry.identifier = GetEncodedDAPath("TRACK-" + track.number).string() + ";1";
+			entry.identifier = GetEncodedDAPath("TRACK-" + track.number).string();
 			entry.type = EntryType::EntryDA;
 
 			// Additional safety check in case the .cue file had a wrong pause size
@@ -578,7 +578,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 	{
         if (entry.subdir == nullptr) // Do not extract directories, they're already prepared
 		{
-			const fs::path outputPath = rootPath / entry.virtualPath / CleanIdentifier(entry.identifier);
+			const fs::path outputPath = rootPath / entry.virtualPath / entry.identifier;
 			if (entry.type == EntryType::EntryXA)
 			{
 				// Extract XA or STR file.
@@ -754,7 +754,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 		if(entry.trackid.empty())
 			continue; // Skip unreferenced entries
 
-		fs::path toChange(rootPath / entry.virtualPath / CleanIdentifier(entry.identifier));
+		fs::path toChange(rootPath / entry.virtualPath / entry.identifier);
 		if(entry.type == EntryType::EntryDA)
 		{
 			toChange = GetEncodedDAPath(toChange);
@@ -1024,7 +1024,7 @@ void ParseISO(cd::IsoReader& reader) {
 		for(const auto& entry : DAfiles)
 		{
 			printf("\n  Track #%d audio:\n", tracknum);
-			printf("    DA File \"%s\"\n", CleanIdentifier(entry->identifier).c_str());
+			printf("    DA File \"%s\"\n", entry->identifier.c_str());
 			tracknum++;
 		}
 		printf( "\nExtracting ISO...\n"
