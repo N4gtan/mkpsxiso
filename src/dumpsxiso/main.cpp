@@ -2,7 +2,6 @@
 #include "xml.h"
 #include "cue.h"
 #include <map>
-#include <format>
 
 #ifndef MKPSXISO_NO_LIBFLAC
 #include "FLAC/stream_encoder.h"
@@ -545,7 +544,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	{
 		if(entry.type == EntryType::EntryDA)
 		{
-			entry.trackid = std::format("{:02}", tracknum);
+			entry.trackid = std::to_string(100 + tracknum).substr(1);
 			tracknum++;
 			DAfiles.push_back(&entry);
 		}
@@ -613,7 +612,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			{
 				if(!entry->trackid.empty())
 				{
-					entry->trackid = std::format("{:02}", tracknum);
+					entry->trackid = std::to_string(100 + tracknum).substr(1);
 				}
 				tracknum++;
 			}
@@ -658,12 +657,12 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 				gapEntry->extData.attributes 	  = rootPrm;
 				if ((sector.subHead[2] & 0x7E) == 0x08)
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", fileCount++, "DAT");
+					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".DAT";
 					gapEntry->type = EntryType::EntryFile;
 				}
 				else
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", fileCount++, "STR");
+					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".STR";
 					gapEntry->type = EntryType::EntryXA;
 				}
 			}

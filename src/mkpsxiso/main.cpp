@@ -1,6 +1,5 @@
 #include "iso.h"		// ISO file system generator module
 #include "xml.h"
-#include <format>
 
 #define MA_NO_THREADING
 #define MA_NO_DEVICE_IO
@@ -336,14 +335,14 @@ int Main(int argc, char* argv[])
 							}
 						}
 
-						// Reuse or create track for this DA file
+						// Reuse or create ID for this DA file
 						const std::string trackid = [&]() -> std::string
 						{
 							if (const char* tid = scanElm->Attribute(xml::attrib::TRACK_ID); tid != nullptr && *tid != 0)
 							{
 								return updateAudioIndexFromTID(tid);
 							}
-							return std::format("{:02}", audioIndex++);
+							return std::to_string(100 + audioIndex++).substr(1);
 						}();
 
 						auto matchByID = audioTracks.end();
@@ -1362,7 +1361,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 					return false;
 				}
 			}
-        	else if (isalnum((unsigned char)ch))
+			else if (isalnum((unsigned char)ch))
 			{
 				ch = std::toupper((unsigned char)ch);
 			}
