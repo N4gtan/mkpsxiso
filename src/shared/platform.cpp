@@ -63,6 +63,15 @@ FILE* OpenFile(const fs::path& path, const char* mode)
 #endif
 }
 
+int SeekFile(FILE *file, int64_t offset, int origin)
+{
+#ifdef _WIN32
+	return _fseeki64(file, offset, origin);
+#else
+	return fseeko(file, offset, origin);
+#endif
+}
+
 std::optional<struct stat64> Stat(const fs::path& path)
 {
 	struct stat64 fileAttrib;
@@ -186,7 +195,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	std::vector<char*> u8argv;
-	u8Arguments.reserve(argc + 1);
+	u8argv.reserve(argc + 1);
 	for (std::string& str : u8Arguments)
 	{
 		u8argv.emplace_back(str.data());

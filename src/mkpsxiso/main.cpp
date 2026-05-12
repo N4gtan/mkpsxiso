@@ -18,7 +18,7 @@ namespace global
 	bool	noXA		= false;
 	int		trackNum	= 1;
 
-	std::optional<bool> new_type;
+	std::optional<bool> cdvd_style;
 	std::optional<std::string> volid_override;
 	std::optional<fs::path> cuefile;
 	fs::path XMLscript;
@@ -32,7 +32,7 @@ namespace global
 };
 
 
-bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& parentAttribs, const fs::path& currentPath);
+bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath);
 int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
@@ -44,7 +44,7 @@ bool UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const un
 		if(entry.trackid != trackid) continue;
 		if(entry.lba != iso::DA_FILE_PLACEHOLDER_LBA)
 		{
-			printf( "ERROR: Cannot replace entry.lba when it is not 0x%X\n ", iso::DA_FILE_PLACEHOLDER_LBA);
+			printf( "ERROR: Cannot replace entry.lba for trackid=\"%s\" when it is not 0x%X\n", entry.trackid.c_str(), iso::DA_FILE_PLACEHOLDER_LBA);
 			return false;
 		}
 		entry.lba = lba;
@@ -169,7 +169,6 @@ int Main(int argc, char* argv[])
 			if (auto output = ParsePathArgument(args, "L", "license"); output.has_value())
 			{
 				global::LicenseFile = output->lexically_normal();
-				OutputOverride = true;
 				continue;
 			}
 			if (auto newxmlfile = ParsePathArgument(args, "rebuildxml"); newxmlfile.has_value())
@@ -262,50 +261,117 @@ int Main(int argc, char* argv[])
 		}
     }
 
-	// Fix XML tree to our current spec
+	// Check if there is an <iso_project> element
+	const tinyxml2::XMLElement* projectElement = xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
+	if ( projectElement == nullptr )
+	{
+		printf( "ERROR: Cannot find <iso_project> element in XML document.\n" );
+		return EXIT_FAILURE;
+	}
+
+	// Fix old XML trees to our current spec
 	// convert DA file source syntax to DA file trackid syntax
-	unsigned trackindex = 2;
 	for(tinyxml2::XMLElement *modifyProject = xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
 		modifyProject != nullptr;
 		modifyProject = modifyProject->NextSiblingElement(xml::elem::ISO_PROJECT))
 	{
+		unsigned audioIndex = 0;
 		tinyxml2::XMLElement *modifyTrack = modifyProject->FirstChildElement(xml::elem::TRACK);
 		if((modifyTrack == nullptr) || (!modifyTrack->Attribute(xml::attrib::TRACK_TYPE, "data")))
 		{
 			continue;
+		}
+		if (const char *new_type = modifyTrack->Attribute("new_type"); new_type != nullptr)
+		{
+			if (modifyTrack->Attribute(xml::attrib::CDVD_STYLE) == nullptr)
+			{
+				modifyTrack->SetAttribute(xml::attrib::CDVD_STYLE, new_type);
+			}
+			modifyTrack->DeleteAttribute("new_type"); // new_type is deprecated
 		}
 		tinyxml2::XMLElement *dt =  modifyTrack->FirstChildElement(xml::elem::DIRECTORY_TREE);
 		if(dt == nullptr)
 		{
 			continue;
 		}
+		std::vector<std::tuple<tinyxml2::XMLElement *, std::string_view, std::string_view>> audioTracks;
 		std::queue<tinyxml2::XMLElement *> toscan({dt});
 		while(!toscan.empty())
 		{
 			tinyxml2::XMLElement *scanElm = toscan.front();
 			toscan.pop();
-			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr && scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+			if (const char *srcdir = scanElm->Attribute("srcdir"); srcdir != nullptr)
 			{
-				scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
-				scanElm->DeleteAttribute("srcdir");
+				if (scanElm->Attribute(xml::attrib::ENTRY_SOURCE) == nullptr)
+				{
+					scanElm->SetAttribute(xml::attrib::ENTRY_SOURCE, srcdir);
+				}
+				scanElm->DeleteAttribute("srcdir"); // srcdir is deprecated
 			}
 			if(CompareICase(scanElm->Name(), xml::elem::FILE))
 			{
 				if(scanElm->Attribute(xml::attrib::ENTRY_TYPE, "da"))
 				{
-					const char *trackid = scanElm->Attribute(xml::attrib::TRACK_ID);
 					const char *source = scanElm->Attribute(xml::attrib::ENTRY_SOURCE);
-					if((trackid != nullptr) && (source != nullptr))
+					if(source != nullptr && *source != 0)
 					{
-						printf( "ERROR: Cannot specify trackid and source at the same time\n ");
-		                return EXIT_FAILURE;
-					}
-					if(source != nullptr)
-					{
-						char tid[3];
-						snprintf(tid, sizeof(tid), "%02u", trackindex);
-						std::string trackid = tid;
-						trackindex++;
+						auto updateAudioIndexFromTID = [&](const char *tid) -> const char*
+						{
+							if (int id = atoi(tid); audioIndex <= id)
+							{
+								audioIndex = id + 1;
+							}
+							return tid;
+						};
+
+						// Index existing tracks only once
+						if (audioIndex == 0)
+						{
+							for (tinyxml2::XMLElement *t = modifyTrack->NextSiblingElement(xml::elem::TRACK); t != nullptr; t = t->NextSiblingElement(xml::elem::TRACK))
+							{
+								const char* tid = t->Attribute(xml::attrib::TRACK_ID);
+								const char* src = t->Attribute(xml::attrib::TRACK_SOURCE);
+								audioTracks.emplace_back(t, tid ? updateAudioIndexFromTID(tid) : "", src ? src : "");
+							}
+						}
+
+						// Reuse or create ID for this DA file
+						const std::string trackid = [&]() -> std::string
+						{
+							if (const char* tid = scanElm->Attribute(xml::attrib::TRACK_ID); tid != nullptr && *tid != 0)
+							{
+								return updateAudioIndexFromTID(tid);
+							}
+							return std::to_string(100 + audioIndex++).substr(1);
+						}();
+
+						auto matchByID = audioTracks.end();
+						std::string_view sourceSV = source;
+						for (auto it = audioTracks.begin(); it != audioTracks.end(); ++it)
+						{
+							auto& [t, tid, src] = *it;
+							// reuse track with same source if possible
+							if (src == sourceSV)
+							{
+								modifyTrack = t;
+								modifyTrack->SetAttribute(xml::attrib::TRACK_ID, trackid.c_str());
+								audioTracks.erase(it);
+								goto update_file;
+							}
+							if (tid == trackid)
+							{
+								matchByID = it;
+							}
+						}
+
+						// reuse track with same ID if source not matched
+						if (matchByID != audioTracks.end())
+						{
+							modifyTrack = std::get<0>(*matchByID);
+							modifyTrack->SetAttribute(xml::attrib::TRACK_SOURCE, source);
+							audioTracks.erase(matchByID);
+							goto update_file;
+						}{
 
                         // add a new track
 						tinyxml2::XMLElement *newtrack = xmlFile.NewElement(xml::elem::TRACK);
@@ -318,7 +384,7 @@ int Main(int argc, char* argv[])
 						modifyProject->InsertAfterChild(modifyTrack, newtrack);
 						modifyTrack = newtrack;
 
-						// update the file to point to the track
+						}update_file: // update the file to point to the track
 						scanElm->DeleteAttribute(xml::attrib::ENTRY_SOURCE);
 						scanElm->SetAttribute(xml::attrib::TRACK_ID, trackid.c_str());
 					}
@@ -360,25 +426,14 @@ int Main(int argc, char* argv[])
 	    return EXIT_SUCCESS;
 	}
 
-	// Check if there is an <iso_project> element
-    const tinyxml2::XMLElement* projectElement =
-		xmlFile.FirstChildElement(xml::elem::ISO_PROJECT);
-
-    if ( projectElement == nullptr )
-	{
-		printf( "ERROR: Cannot find <iso_project> element in XML document.\n" );
-		return EXIT_FAILURE;
-    }
-
     int imagesCount = 0;
-
 	// Build loop for XML scripts with multiple <iso_project> elements
 	while ( projectElement != nullptr )
 	{
 		imagesCount++;
 		if ( imagesCount > 1 && OutputOverride )
 		{
-			printf( "ERROR: -o/-c/-L switches cannot be used in a multi-disc ISO "
+			printf( "ERROR: -o or -c switches cannot be used in a multi-disc ISO "
 				"project.\n" );
 			return EXIT_FAILURE;
 		}
@@ -495,8 +550,6 @@ int Main(int argc, char* argv[])
 		std::vector<cdtrack> audioTracks;
 		iso::EntryList unrefTracks;
 
-		const tinyxml2::XMLElement* dataTrack = nullptr;
-
 		// Parse tracks
 		if ( !global::QuietMode )
 		{
@@ -529,17 +582,16 @@ int Main(int argc, char* argv[])
 			// Generate ISO file system for data track
 			if ( CompareICase( "data", track_type ) )
 			{
-				dataTrack = trackElement;
 				global::xa_edc = trackElement->BoolAttribute(xml::attrib::XA_EDC, true);
 
 				// This check is necessary so as to leave an empty value for compatibility with <=v2.04 dumped files timestamps
-				if ( trackElement->Attribute(xml::attrib::NEW_TYPE) != nullptr )
+				if ( trackElement->Attribute(xml::attrib::CDVD_STYLE) != nullptr )
 				{
-					global::new_type = trackElement->BoolAttribute(xml::attrib::NEW_TYPE);
+					global::cdvd_style = trackElement->BoolAttribute(xml::attrib::CDVD_STYLE);
 				}
 				if ( (global::ps2 = trackElement->BoolAttribute(xml::attrib::PS2)) )
 				{
-					global::new_type = true; // Force true if it's an PS2 disc
+					global::cdvd_style = true; // Force true if it's an PS2 disc
 				}
 
 				if ( global::trackNum != 1 )
@@ -694,8 +746,7 @@ int Main(int argc, char* argv[])
 			global::trackNum++;
 		}
 
-		iso::DIRENTRY& root = entries.front();
-	    iso::DirTreeClass* dirTree = root.subdir.get();
+	    iso::DirTreeClass* dirTree = entries.front().subdir.get();
 
 		if ( !global::LBAfile.empty() )
 		{
@@ -718,15 +769,15 @@ int Main(int argc, char* argv[])
 
 				dirTree->OutputLBAlisting( fp, 0 );
 
-				dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
-					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
+					iso::DirTreeClass tempTree(unrefTracks);
 					for (auto& entry : unrefTracks)
 					{
-						dirTree.entriesInDir.push_back(entry);
+						tempTree.entriesInDir.push_back(entry);
 					}
-					dirTree.OutputLBAlisting( fp, 0 );
+					tempTree.OutputLBAlisting( fp, 0 );
 				}
 
 				fclose( fp );
@@ -754,18 +805,18 @@ int Main(int argc, char* argv[])
 			{
 				dirTree->SortDirectoryEntries(false, true);
 
-				dirTree->OutputHeaderListing( fp, 0 );
+				dirTree->OutputHeaderListing( fp, 0, "<ROOT>" );
 
-				dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+				dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 				if (!unrefTracks.empty())
 				{
-					iso::DirTreeClass dirTree(unrefTracks, nullptr, "UNREFERENCED TRACKS");
+					iso::DirTreeClass tempTree(unrefTracks);
 					for (auto& entry : unrefTracks)
 					{
-						dirTree.entriesInDir.push_back(entry);
+						tempTree.entriesInDir.push_back(entry);
 					}
 					fprintf( fp, "\n" );
-					dirTree.OutputHeaderListing( fp, 1 );
+					tempTree.OutputHeaderListing( fp, 1, "UNREFERENCED TRACKS" );
 				}
 
 				fprintf( fp, "\n#endif\n" );
@@ -896,10 +947,10 @@ int Main(int argc, char* argv[])
 			}
 
 			// Write directory entries
-			dirTree->WriteDirectoryRecords( &writer, root, global::new_type.value_or(false) ? dirTree->GetDirCountTotal() : 0 );
+			dirTree->WriteDirectoryRecords( &writer );
 
 			// Write file system descriptors to finish the image
-	        iso::WriteDescriptor( &writer, isoIdentifiers, root, totalLenLBA );
+	        dirTree->WriteDescriptor( &writer, isoIdentifiers, totalLenLBA );
 
 			if ( !global::QuietMode )
 			{
@@ -966,12 +1017,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		trackElement->FirstChildElement(xml::elem::IDENTIFIERS);
 
 	// Set file system identifiers
-
 	if ( identifierElement != nullptr )
 	{
-		const char* identifierFile;
-		
-		// Otherwise use individual elements defined by each attribute
+		// Use individual elements defined by each attribute
 		isoIdentifiers.SystemID		= identifierElement->Attribute(xml::attrib::SYSTEM_ID);
 		isoIdentifiers.VolumeID		= identifierElement->Attribute(xml::attrib::VOLUME_ID);
 		isoIdentifiers.VolumeSet	= identifierElement->Attribute(xml::attrib::VOLUME_SET);
@@ -983,7 +1031,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		isoIdentifiers.ModificationDate = identifierElement->Attribute(xml::attrib::MODIFICATION_DATE);
 
 		// Is an ID file specified?
-		if( (identifierFile = identifierElement->Attribute(xml::attrib::ID_FILE)) )
+		if( const char* identifierFile = identifierElement->Attribute(xml::attrib::ID_FILE) )
 		{
 			// Load the file as an XML document
 			{
@@ -1046,7 +1094,9 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 					isoIdentifiers.ModificationDate = str;
 			}
 		}
+	}
 
+	{ // Set default identifiers if not present
 		bool hasSystemID = true;
 		if ( isoIdentifiers.SystemID == nullptr )
 		{
@@ -1232,7 +1282,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 	const int rootLBA = 18+(GetSizeInSectors(pathTableLen)*4);
 
 	// Sort directory entries, calculate tree LBAs and retrieve size of image
-	dirTree->SortDirectoryEntries(global::new_type.value_or(false));
+	dirTree->SortDirectoryEntries(global::cdvd_style.value_or(false));
 	totalLen = dirTree->CalculateTreeLBA(rootLBA);
 
 	if ( !global::QuietMode )
@@ -1301,7 +1351,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 					return false;
 				}
 			}
-        	else if (isalnum((unsigned char)ch))
+			else if (isalnum((unsigned char)ch))
 			{
 				ch = std::toupper((unsigned char)ch);
 			}
@@ -1311,8 +1361,9 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 				return false;
 			}
 		}
+		/* Legend of Mana does not follow this rule.
 		if (dots == 0)
-			name += '.';
+			name += '.';*/
 	}
 
 	// ECMA-119 7.5.1 and 10.1 - File Identifier shall be 1-30 characters long plus one dot.
@@ -1436,18 +1487,6 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	return dirTree->AddFileEntry(std::move(name), entry, std::move(srcFile), ReadEntryAttributes(defaultAttributes, dirElement), trackid, dirElement->Attribute(xml::attrib::ENTRY_DATE));
 }
 
-static bool ParseDummyEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement)
-{
-	// TODO: For now this is a hack, unify this code again with the file type in the future
-	// so it isn't as awkward
-
-	dirTree->AddDummyEntry( dirElement->UnsignedAttribute(xml::attrib::NUM_DUMMY_SECTORS),
-							dirElement->UnsignedAttribute(xml::attrib::ENTRY_TYPE),
-							dirElement->UnsignedAttribute(xml::attrib::OFFSET),
-							dirElement->BoolAttribute(xml::attrib::ECC_ADDRES) );
-	return true;
-}
-
 static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)
 {
 	fs::path srcDir;
@@ -1545,10 +1584,10 @@ bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* pare
 		}
 		else if ( CompareICase( "dummy", dirElement->Name() ))
 		{
-			if (!ParseDummyEntry(dirTree, dirElement))
-			{
-				return false;
-			}
+			dirTree->AddDummyEntry( dirElement->UnsignedAttribute(xml::attrib::NUM_DUMMY_SECTORS),
+									dirElement->UnsignedAttribute(xml::attrib::ENTRY_TYPE),
+									dirElement->UnsignedAttribute(xml::attrib::OFFSET),
+									dirElement->BoolAttribute(xml::attrib::ECC_ADDRES) );
         }
 		else if ( CompareICase( "dir", dirElement->Name() ))
 		{
@@ -1566,7 +1605,7 @@ bool PackFileAsCDDA(void* buffer, const fs::path& audioFile)
 {
 	// open the decoder
 	ma_decoder decoder;
-	VirtualWavEx vw;
+	VirtualWav vw;
 	bool isLossy;
 	bool isPCM;
 	if(ma_redbook_decoder_init_path_by_ext(audioFile, &decoder, &vw, isLossy, isPCM) != MA_SUCCESS)
