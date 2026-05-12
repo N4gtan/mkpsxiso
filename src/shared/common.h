@@ -30,7 +30,7 @@ struct cdtrack
 class EntryAttributes
 {
 private:
-	static constexpr signed char DEFAULT_GMTOFFS = 0;
+	static constexpr signed char DEFAULT_GMTOFFS = 36;
 	static constexpr unsigned char DEFAULT_HIDDEN_FLAG = 0;
 	static constexpr unsigned char DEFAULT_XAATRIB = 0xFF;
 	static constexpr unsigned short DEFAULT_XAPERM = 0x555; // rx
