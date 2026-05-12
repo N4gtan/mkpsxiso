@@ -1004,7 +1004,6 @@ int iso::DirTreeClass::GeneratePathTable(unsigned char* buff, bool msb) const
 	// Write out root explicitly first
 	pathTable.entries.emplace_back(
 		m_entry->id,
-		index,
 		index, // Self for Root
 		m_entry->lba
 	);
@@ -1025,7 +1024,6 @@ int iso::DirTreeClass::GeneratePathTable(unsigned char* buff, bool msb) const
 			{
 				pathTable.entries.emplace_back(
 					entry.id,
-					index,
 					parentIndex,
 					entry.lba
 				);
