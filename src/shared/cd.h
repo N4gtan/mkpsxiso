@@ -107,7 +107,7 @@ namespace cd {
 		unsigned char	identifierLen;	/// Length of Directory Identifier(LEN_DI) (or 1 for the root directory)
 		unsigned char	extLength;		/// Number of sectors in Extended Attribute Record
 		unsigned int	dirOffs;		/// Number of the first sector in the directory, as a double word
-		short			parentDirIndex;	/// Index of the directory record's parent directory
+		unsigned short	parentDirIndex;	/// Index of the directory record's parent directory
 		// If identifierLen is odd numbered, a padding byte will be present after the identifier text.
 	};
 

@@ -1004,12 +1004,11 @@ int iso::DirTreeClass::GeneratePathTable(unsigned char* buff, bool msb) const
 	PathTableClass pathTable;
 
 	// Write out root explicitly first
-	pathTable.entries.emplace_back(
+	pathTable.entries.push_back({
 		m_entry->id,
-		index,
 		index, // Self for Root
 		m_entry->lba
-	);
+	});
 
 	// Initialize Breadth-First Search Queue
 	std::queue<std::tuple<const DirTreeClass*, unsigned short>> dirsToProcess;
@@ -1025,12 +1024,11 @@ int iso::DirTreeClass::GeneratePathTable(unsigned char* buff, bool msb) const
 		{
 			if (entry.type == EntryType::EntryDir)
 			{
-				pathTable.entries.emplace_back(
+				pathTable.entries.push_back({
 					entry.id,
-					index,
 					parentIndex,
 					entry.lba
-				);
+				});
 
 				// Queue subdirectories
 				dirsToProcess.emplace(entry.subdir.get(), index++);

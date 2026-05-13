@@ -51,7 +51,6 @@ namespace iso
 		struct PathEntry
 		{
 			std::string dir_id;
-			unsigned short dir_index = 0;
 			unsigned short dir_parent_index = 0;
 			int dir_lba = 0;
 		};
