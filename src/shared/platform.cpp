@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <vector>
 #else
-#include <fcntl.h>
+#include <sys/time.h>
 #endif
 
 #ifdef _WIN32
@@ -60,6 +60,15 @@ FILE* OpenFile(const fs::path& path, const char* mode)
 	return _wfopen(path.c_str(), UTF8ToUTF16(mode).c_str());
 #else
 	return fopen(path.c_str(), mode);
+#endif
+}
+
+int SeekFile(FILE *file, int64_t offset, int origin)
+{
+#ifdef _WIN32
+	return _fseeki64(file, offset, origin);
+#else
+	return fseeko(file, offset, origin);
 #endif
 }
 
@@ -161,12 +170,11 @@ void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate)
 		CloseHandle(hFile);
 	}
 #else
-	struct timespec times[2];
-	times[0].tv_nsec = UTIME_OMIT;
-
+	struct timeval times[2]{};
+	times[0].tv_sec = time;
 	times[1].tv_sec = time;
-	times[1].tv_nsec = 0;
-	if(0 != utimensat(AT_FDCWD, path.c_str(), times, 0))
+
+	if(0 != utimes(path.c_str(), times))
 	{
 		printf("ERROR: unable to update timestamps for %s\n", path.string().c_str());
 	}
@@ -186,7 +194,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	std::vector<char*> u8argv;
-	u8Arguments.reserve(argc + 1);
+	u8argv.reserve(argc + 1);
 	for (std::string& str : u8Arguments)
 	{
 		u8argv.emplace_back(str.data());

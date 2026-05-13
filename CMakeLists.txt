@@ -5,15 +5,18 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
 	mkpsxiso
-	LANGUAGES    C CXX
+	LANGUAGES    CXX
 	VERSION      2.20
 	DESCRIPTION  "PlayStation ISO image maker & dumping tool"
 	HOMEPAGE_URL "https://github.com/Lameguy64/mkpsxiso"
 )
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-set(CMAKE_C_STANDARD           11)
-set(CMAKE_CXX_STANDARD         20)
+set(CMAKE_CXX_STANDARD			20)
+set(CMAKE_CXX_STANDARD_REQUIRED	ON)
+set(CMAKE_CXX_EXTENSIONS		OFF)
+
+set(BUILD_SHARED_LIBS			OFF)
+set(CMAKE_MSVC_RUNTIME_LIBRARY	"MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # Useful paths
 set(mkpsxiso_dir "src/mkpsxiso")

@@ -29,7 +29,7 @@ jobs:
 
   build-linux:
     name:    Build mkpsxiso on Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Fetch repo contents
@@ -39,8 +39,6 @@ jobs:
 
     - name: Build and package mkpsxiso
       run: |
-        export CC=clang
-        export CXX=clang++
         cmake --workflow ci
 
     - name: Upload build artifacts
@@ -54,6 +52,9 @@ jobs:
   build-macos:
     name:    Build mkpsxiso on macOS
     runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.15"
+      CMAKE_OSX_ARCHITECTURES:  "x86_64;arm64"
 
     steps:
     - name: Fetch repo contents

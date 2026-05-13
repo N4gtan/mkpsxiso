@@ -11,14 +11,6 @@ namespace global
 	extern bool xa_edc;
 }
 
-ISO_USHORT_PAIR cd::SetPair16(unsigned short val) {
-    return { val, SwapBytes16(val) };
-}
-
-ISO_UINT_PAIR cd::SetPair32(unsigned int val) {
-	return { val, SwapBytes32(val) };
-}
-
 bool IsoWriter::Create(const fs::path& fileName, unsigned int sizeLBA)
 {
 	const uint64_t sizeBytes = static_cast<uint64_t>(sizeLBA) * CD_SECTOR_SIZE;
@@ -37,11 +29,11 @@ void IsoWriter::Close()
 // ======================================================
 
 IsoWriter::SectorView::SectorView(ThreadPool* threadPool, MMappedFile* mappedFile, unsigned int offsetLBA, unsigned int sizeLBA, EdcEccForm edcEccForm)
-	: m_threadPool(threadPool) 
-	, m_view(mappedFile->GetView(static_cast<uint64_t>(offsetLBA) * CD_SECTOR_SIZE, static_cast<size_t>(sizeLBA) * CD_SECTOR_SIZE))
-	, m_currentLBA(offsetLBA)
+	: m_currentLBA(offsetLBA)
 	, m_endLBA(offsetLBA + sizeLBA)
 	, m_edcEccForm(edcEccForm)
+	, m_threadPool(threadPool)
+	, m_view(mappedFile->GetView(static_cast<uint64_t>(offsetLBA) * CD_SECTOR_SIZE, static_cast<size_t>(sizeLBA) * CD_SECTOR_SIZE))
 {
 	m_currentSector = m_view.GetBuffer();
 }
@@ -153,7 +145,7 @@ public:
 		while (m_currentLBA < m_endLBA)
 		{
 			PrepareSectorHeader();
-			SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOF);
+			SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOX);
 
 			const size_t bytesRead = fread(sector->data, 1, F1_DATA_SIZE, file);
 			// Fill the remainder of the sector with zeroes if applicable
@@ -173,7 +165,7 @@ public:
 		}
 	}
 
-	void WriteMemory(const void* memory, size_t size) override
+	void WriteMemory(const void* memory, size_t size, const bool setEOX) override
 	{
 		const char* buf = static_cast<const char*>(memory);
 		const unsigned int lastLBA = m_endLBA - 1;
@@ -185,7 +177,7 @@ public:
 			if (m_offsetInSector == 0)
 			{
 				PrepareSectorHeader();
-				SetSubHeader(sector->subHead, m_currentLBA != lastLBA ? m_subHeader : IsoWriter::SubEOF);
+				SetSubHeader(sector->subHead, m_currentLBA != lastLBA || !setEOX ? m_subHeader : IsoWriter::SubEOX);
 			}
 
 			const size_t memToCopy = std::min(GetSpaceInCurrentSector(), size);
@@ -332,7 +324,7 @@ public:
 		}
 	}
 
-	void WriteMemory(const void* memory, size_t size) override
+	void WriteMemory(const void* memory, size_t size, const bool /*setEOX*/) override
 	{
 		const char* buf = static_cast<const char*>(memory);
 

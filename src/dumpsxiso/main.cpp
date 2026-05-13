@@ -2,7 +2,6 @@
 #include "xml.h"
 #include "cue.h"
 #include <map>
-#include <format>
 
 #ifndef MKPSXISO_NO_LIBFLAC
 #include "FLAC/stream_encoder.h"
@@ -57,7 +56,9 @@ namespace param {
 namespace global
 {
 	CueFile cueFile;
-	std::optional<bool> new_type;
+	bool ps2 = false;
+	bool xa_edc = true;
+	std::optional<bool> cdvd_style;
 }
 
 fs::path GetEncodedDAPath(const fs::path& inputPath)
@@ -108,7 +109,7 @@ void PrintDate(const char* label, const cd::ISO_LONG_DATESTAMP& date)
 }
 
 template<size_t N>
-static std::string_view CleanDescElement(char (&id)[N])
+static std::string_view CleanDescElement(const char (&id)[N])
 {
 	std::string_view result;
 
@@ -142,12 +143,14 @@ void prepareRIFFHeader(cd::RIFF_HEADER* header, int dataSize) {
 
 // This will ensure that the EDC remains the same as in the original file. Games built with an old, buggy Sony's mastering tool version
 // don't have EDC Form2 data (this can be checked at redump.org) and some games rely on this to do anti-piracy checks like DDR.
-const bool CheckEDCXA(cd::IsoReader &reader) {
+const bool CheckEDCXA()
+{
 	cd::SECTOR_M2F2 sector;
-	while (reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE, true))
+	while (cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE))
 	{
-		if (sector.subHead[2] & 0x20) {
-			if (!memcmp(sector.edc, "\0\0\0\0", sizeof(sector.edc)))
+		if (sector.subHead[2] & 0x20)
+		{
+			if (memcmp(sector.edc, "\0\0\0\0", sizeof(sector.edc)) == 0)
 			{
 				return false;
 			}
@@ -157,18 +160,19 @@ const bool CheckEDCXA(cd::IsoReader &reader) {
 	return true;
 }
 
-// Games from 2003 and onwards apparenly has built with a newer Sony's mastering tool.
-// These has different submode in the descriptor sectors, a correct root year value and files are sorted by LBA instead by name.
-const bool CheckISOver(cd::IsoReader &reader, bool& ps2)
+// Some games from ~2003 apparently were built with a tool newer than Sony CD-ROM Generator 1.40.
+// Likely an internal transition tool that shares the Sony CD/DVD-ROM Generator engine layout logic.
+// These have different submodes in the descriptor sectors, a correct root year value and entries are not sorted by name.
+const bool CheckISOver()
 {
 	cd::SECTOR_M2F2 sector;
-	reader.SeekToSector(15);
-	reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE);
+	cd::reader->SeekToSector(15);
+	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE);
 	if (sector.subHead[2] & 0x08)
 	{
-		ps2 = true;
+		global::ps2 = true;
 	}
-	reader.ReadBytesXA(sector.subHead, XA_DATA_SIZE, true);
+	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE, true);
 	if (sector.subHead[2] & 0x01)
 	{
 		return false;
@@ -455,7 +459,7 @@ std::unique_ptr<cd::IsoDirEntries> ParsePathTable(cd::IsoReader& reader, ListVie
 
 	// Calculate Directory Record sector size
 	int dirRecordSectors = 0;
-	if (*global::new_type && pathTableList.size() != index + 1)
+	if (*global::cdvd_style && pathTableList.size() != index + 1)
 	{
 		dirRecordSectors = pathTableList[index + 1].entry.dirOffs - pathTableList[index].entry.dirOffs;
 	}
@@ -540,7 +544,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	{
 		if(entry.type == EntryType::EntryDA)
 		{
-			entry.trackid = std::format("{:02}", tracknum);
+			entry.trackid = std::to_string(100 + tracknum).substr(1);
 			tracknum++;
 			DAfiles.push_back(&entry);
 		}
@@ -575,21 +579,14 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			// For ex, Mega Man X3 track 30 had 149 sectors pause, but at redump.org says it was a 150 standard one
 			unsigned char sectorBuff[CD_SECTOR_SIZE];
 			unsigned char emptyBuff[CD_SECTOR_SIZE] {};
-			while (true)
+			while (reader.SeekToSector(entry.entry.entryOffs.lsb - 1) || multiBinSeeker(entry.entry.entryOffs.lsb - 1, entry, reader, global::cueFile))
 			{
-				if (!reader.SeekToSector(entry.entry.entryOffs.lsb - 1) && !multiBinSeeker(entry.entry.entryOffs.lsb - 1, entry, reader, global::cueFile))
+				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
+				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE) == 0)
 					break;
 
-				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
-				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE))
-				{
-					entry.entry.entryOffs.lsb--;
-					entry.entry.entrySize.lsb += F1_DATA_SIZE;
-				}
-				else
-				{
-					break;
-				}
+				entry.entry.entryOffs.lsb--;
+				entry.entry.entrySize.lsb += F1_DATA_SIZE;
 			}
 		}
 
@@ -615,7 +612,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			{
 				if(!entry->trackid.empty())
 				{
-					entry->trackid = std::format("{:02}", tracknum);
+					entry->trackid = std::to_string(100 + tracknum).substr(1);
 				}
 				tracknum++;
 			}
@@ -628,12 +625,12 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	return DAfiles;
 }
 
-void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries, unsigned int currentLBA, unsigned int totalLenLBA)
+void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries, unsigned int currentLBA, const unsigned int totalLenLBA)
 {
 	cd::SECTOR_M2F2 sector;
-	int filenum = 0;
+	int fileCount = 0;
 
-	auto processGaps = [&](unsigned int endLBA)
+	auto processGaps = [&](const unsigned int endLBA)
 	{
 		cd::IsoDirEntries::Entry* gapEntry = &entries.front(); // Get root stats
 		signed char rootGMTOff = gapEntry->entry.entryDate.GMToffs;
@@ -660,12 +657,12 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 				gapEntry->extData.attributes 	  = rootPrm;
 				if ((sector.subHead[2] & 0x7E) == 0x08)
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", filenum++, "DAT");
+					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".DAT";
 					gapEntry->type = EntryType::EntryFile;
 				}
 				else
 				{
-					gapEntry->identifier = std::format("UNKN{:04}.{};1", filenum++, "STR");
+					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".STR";
 					gapEntry->type = EntryType::EntryXA;
 				}
 			}
@@ -1075,10 +1072,9 @@ void WriteXMLByDirectories(const cd::IsoDirEntries* directory, tinyxml2::XMLElem
 void ParseISO(cd::IsoReader& reader) {
 
     cd::ISO_DESCRIPTOR descriptor;
-	bool ps2 = false;
 	auto license = ReadLicense(reader);
-	const bool xa_edc = CheckEDCXA(reader);
-	global::new_type = CheckISOver(reader, ps2);
+	global::xa_edc = CheckEDCXA();
+	global::cdvd_style = CheckISOver();
 
     reader.SeekToSector(16);
     reader.ReadBytes(&descriptor, F1_DATA_SIZE);
@@ -1153,7 +1149,7 @@ void ParseISO(cd::IsoReader& reader) {
 	// Process DA tracks and add them to the entries list
 	auto DAfiles = ParseDAfiles(reader, entries);
 
-	unsigned totalLenLBA = descriptor.volumeSize.lsb;
+	const unsigned totalLenLBA = descriptor.volumeSize.lsb;
 	if (param::force)
 	{
 		BruteForce(reader, entries, descriptor.rootDirRecord.entryOffs.lsb, totalLenLBA);
@@ -1226,11 +1222,11 @@ void ParseISO(cd::IsoReader& reader) {
 
 			tinyxml2::XMLElement *trackElement = baseElement->InsertNewChildElement(xml::elem::TRACK);
 			trackElement->SetAttribute(xml::attrib::TRACK_TYPE, "data");
-			trackElement->SetAttribute(xml::attrib::XA_EDC, xa_edc);
-			trackElement->SetAttribute(xml::attrib::NEW_TYPE, *global::new_type);
-			if (ps2)
+			trackElement->SetAttribute(xml::attrib::XA_EDC, global::xa_edc);
+			trackElement->SetAttribute(xml::attrib::CDVD_STYLE, *global::cdvd_style);
+			if (global::ps2)
 			{
-				trackElement->SetAttribute(xml::attrib::PS2, ps2);
+				trackElement->SetAttribute(xml::attrib::PS2, global::ps2);
 			}
 
 			{
@@ -1512,7 +1508,7 @@ int Main(int argc, char *argv[])
 		global::cueFile = parseCueFile(param::isoFile);
 	}
 
-	cd::IsoReader reader;
+	cd::IsoReader& reader = *(cd::reader = std::make_unique<cd::IsoReader>());
 
 	if (!reader.Open(param::isoFile)) {
 

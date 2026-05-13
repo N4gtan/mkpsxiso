@@ -7,11 +7,8 @@ cd::IsoReader::IsoReader()
 
 cd::IsoReader::~IsoReader()
 {
-    if (filePtr != NULL)
-		fclose(filePtr);
-
+	Close();
 }
-
 
 bool cd::IsoReader::Open(const fs::path& fileName)
 {
@@ -22,11 +19,10 @@ bool cd::IsoReader::Open(const fs::path& fileName)
     if (filePtr == NULL)
 		return(false);
 
-	fseek(filePtr, 0, SEEK_END);
-	totalSectors = ftell(filePtr) / CD_SECTOR_SIZE;
-	fseek(filePtr, 0, SEEK_SET);
+	totalSectors = GetSize(fileName) / CD_SECTOR_SIZE;
 
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
+	if (!ReadSector())
+	{
 		Close();
 		return false;
 	}
@@ -34,173 +30,124 @@ bool cd::IsoReader::Open(const fs::path& fileName)
     currentByte		= 0;
     currentSector	= 0;
 
-    sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
 	return(true);
 
 }
 
-size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
+inline bool cd::IsoReader::ReadSector()
 {
-	if (currentSector >= totalSectors) {
-		return 0;
+	if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1)
+	{
+		return false;
 	}
 
+	sectorM2F1 = reinterpret_cast<cd::SECTOR_M2F1*>(sectorBuff);
+	sectorM2F2 = reinterpret_cast<cd::SECTOR_M2F2*>(sectorBuff);
+
+	return true;
+}
+
+inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd)
+{
 	size_t bytesRead = 0;
     char* const dataPtr = (char*)ptr;
 
+	if (currentSector >= totalSectors) [[unlikely]]
+		goto eof_fill;
+
     while(bytes > 0)
 	{
-		const size_t toRead = std::min(F1_DATA_SIZE - currentByte, bytes);
+		if (currentByte >= dataEnd) [[unlikely]]
+			goto check_next_sector;
 
-        memcpy(dataPtr+bytesRead, &sectorM2F1->data[currentByte], toRead);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= F1_DATA_SIZE)
+		if (currentByte < dataBeg)
 		{
-			if (singleSector || !PrepareNextSector())
+			currentByte = dataBeg;
+		}
+
+		{
+			const size_t toRead = std::min(dataEnd - currentByte, bytes);
+
+			if (dataPtr != nullptr)
 			{
-				return bytesRead;
+				memcpy(dataPtr + bytesRead, &sectorBuff[currentByte], toRead);
 			}
+
+			bytes		-= toRead;
+			bytesRead	+= toRead;
+			currentByte	+= toRead;
+		}
+
+		if (currentByte >= dataEnd)
+		{
+		check_next_sector:
+			if (singleSector)
+				return bytesRead;
+			else if (!PrepareNextSector()) [[unlikely]]
+				goto eof_fill;
 		}
     }
 
-    return bytesRead;
+	return bytesRead;
 
+eof_fill:
+	if (dataPtr != nullptr && bytes > 0)
+	{
+		memset(dataPtr + bytesRead, 0, bytes);
+	}
+    return bytesRead;
+}
+
+size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
+{
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
+	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesXA(void* ptr, size_t bytes, bool singleSector)
 {
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    char* const dataPtr = (char*)ptr;
-
-    while(bytes > 0)
-	{
-		const size_t toRead = std::min(XA_DATA_SIZE - currentByte, bytes);
-
-        memcpy(dataPtr+bytesRead, &sectorM2F2->subHead[currentByte], toRead);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= XA_DATA_SIZE)
-		{
-			if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-    return bytesRead;
-
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F2, subHead);
+	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + XA_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesDA(void* ptr, size_t bytes, bool singleSector)
 {
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    char* const dataPtr = (char*)ptr;
-
-    while(bytes > 0)
-	{
-		const size_t toRead = std::min(CD_SECTOR_SIZE - currentByte, bytes);
-
-        memcpy(dataPtr+bytesRead, &sectorBuff[currentByte], toRead);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= CD_SECTOR_SIZE)
-		{
-			if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-	return bytesRead;
-
+	return ReadBytesImpl(ptr, bytes, singleSector, 0, CD_SECTOR_SIZE);
 }
 
-size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector) {
-
-	if (currentSector >= totalSectors) {
-		return 0;
-	}
-
-	size_t bytesRead = 0;
-    while(bytes > 0) {
-
-        const size_t toRead = std::min(F1_DATA_SIZE - currentByte, bytes);
-
-		currentByte += toRead;
-		bytesRead += toRead;
-		bytes -= toRead;
-
-		if (currentByte >= F1_DATA_SIZE) {
-
-            if (singleSector || !PrepareNextSector())
-			{
-				return bytesRead;
-			}
-		}
-    }
-
-	return bytesRead;
+size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector)
+{
+	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
+	return ReadBytesImpl(nullptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
-bool cd::IsoReader::SeekToSector(int sector) {
-
+bool cd::IsoReader::SeekToSector(const uint32_t sector)
+{
 	if (sector >= totalSectors || filePtr == nullptr)
 		return false;
 
-    fseek(filePtr, CD_SECTOR_SIZE*sector, SEEK_SET);
-	if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
+    if (SeekFile(filePtr, CD_SECTOR_SIZE*static_cast<int64_t>(sector), SEEK_SET) != 0 ||
+		!ReadSector())
+	{
 		return false;
 	}
 
 	currentSector = sector;
 	currentByte = 0;
 
-	sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
-	return !ferror(filePtr);
-
+	return true;
 }
 
-size_t cd::IsoReader::SeekToByte(size_t offs) {
-
-	int sector = (offs/CD_SECTOR_SIZE);
-
-	fseek(filePtr, CD_SECTOR_SIZE*sector, SEEK_SET);
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1) {
-		return 0;
+bool cd::IsoReader::SeekToByte(const size_t offs)
+{
+	if (!SeekToSector(offs/CD_SECTOR_SIZE))
+	{
+		return false;
 	}
 
-	currentSector = sector;
 	currentByte = offs%CD_SECTOR_SIZE;
 
-	sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-    sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
-
-	return (CD_SECTOR_SIZE*static_cast<size_t>(currentSector))+currentByte;
-
+	return true;
 }
 
 size_t cd::IsoReader::GetPos() const
@@ -222,13 +169,11 @@ bool cd::IsoReader::PrepareNextSector()
 	currentByte = 0;
 	currentSector++;
 
-    if (fread(sectorBuff, CD_SECTOR_SIZE, 1, filePtr) != 1)
+	if (!ReadSector())
 	{
 		return false;
-    }
+	}
 
-    sectorM2F1 = (cd::SECTOR_M2F1*)sectorBuff;
-	sectorM2F2 = (cd::SECTOR_M2F2*)sectorBuff;
 	return true;
 }
 
@@ -266,7 +211,7 @@ size_t cd::IsoPathTable::ReadPathTable(cd::IsoReader* reader, int lba, unsigned 
 			// ECMA-119 9.4.6 - 00 field present only if entry length is an odd number
 			if ((length % 2) != 0)
 			{
-				bytesRead += reader->SkipBytes(1);
+				bytesRead += reader->SkipBytes(1, true);
 			}
 
 			// Strip trailing zeroes, if any
@@ -322,13 +267,9 @@ static EntryType GetXAEntryType(unsigned short xa_attr)
 		// if the mode 2 form 1 flag is set, and form 2 is not, we assume this is a regular file.
 		return EntryType::EntryFile;
 	}
-	if ( (xa_attr & 0x10) && !(xa_attr & 0x08) )
-	{
-		// if the mode 2 form 2 flag is set, and form 1 is not, we assume this is a pure audio xa file.
-		return EntryType::EntryXA;
-	}
 
-	// here all flags are set to the same value. From what I could see until now, when both flags are the same,
+	// If the mode 2 form 2 flag (0x10) is set, and form 1 (0x08) is not, we assume this is a pure audio xa file.
+	// Otherwise, all flags are set to the same value. From what I could see until now, when both flags are the same,
 	// this is interpreted in the following two ways, which both lead us to choose str/xa type.
 	// 1. Both values are 1, which means there is an indication by the mode 2 form 2 flag that the data is not
 	//    regular mode 2 form 1 data (i.e., it is either mixed or just xa).
@@ -360,11 +301,11 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 
 			if (numEntries++ >= 2)
 			{
-				if (*global::new_type)
+				if (*global::cdvd_style)
 				{
 					entry->order = order++;
 				}
-				dirEntryList.emplace(std::move(entry.value()));
+				dirEntryList.emplace(std::move(*entry));
 			}
 		}
     }
@@ -376,7 +317,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 		});
 
 	// Delete orders if all are correct to avoid populate the xml with unnecessary strings
-	if (*global::new_type)
+	if (*global::cdvd_style)
 	{
 		auto& entriesInDir = dirEntryList.GetView();
 		for (int index = 0; index < entriesInDir.size(); index++)
@@ -391,7 +332,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 	}
 }
 
-std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoReader* reader) const
+std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoReader* reader)
 {
 	Entry entry;
 
@@ -413,7 +354,7 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	// ECMA-119 9.1.12 - 00 field present only if file identifier length is an even number
 	if ((entry.entry.identifierLen % 2) == 0)
     {
-		bytesRead += reader->SkipBytes(1);
+		bytesRead += reader->SkipBytes(1, true);
     }
 
 	// Read XA attribute data
@@ -451,6 +392,6 @@ void cd::IsoDirEntries::ReadRootDir(cd::IsoReader* reader, int lba)
 	auto entry = ReadEntry(reader);
 	if (entry)
 	{
-		dirEntryList.emplace(std::move(entry.value()));
+		dirEntryList.emplace(std::move(*entry));
 	}
 }

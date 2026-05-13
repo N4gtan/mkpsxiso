@@ -52,7 +52,7 @@ public:
 // Shared by mkpsxiso and dumpsxiso
 namespace global
 {
-	extern std::optional<bool> new_type;
+	extern std::optional<bool> cdvd_style;
 }
 
 // Helper functions for datestamp manipulation
