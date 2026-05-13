@@ -305,7 +305,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 				{
 					entry->order = order++;
 				}
-				dirEntryList.emplace(std::move(entry.value()));
+				dirEntryList.emplace(std::move(*entry));
 			}
 		}
     }
@@ -392,6 +392,6 @@ void cd::IsoDirEntries::ReadRootDir(cd::IsoReader* reader, int lba)
 	auto entry = ReadEntry(reader);
 	if (entry)
 	{
-		dirEntryList.emplace(std::move(entry.value()));
+		dirEntryList.emplace(std::move(*entry));
 	}
 }

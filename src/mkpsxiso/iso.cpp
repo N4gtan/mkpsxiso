@@ -477,7 +477,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 		{
 			// Special cases - current/parent directory entry
 			dirEntry->identifierLen = 1;
-			identifierBuffer[0] = currentOrParent.value() ? '\1' : '\0';
+			identifierBuffer[0] = *currentOrParent ? '\1' : '\0';
 		}
 		int entryLength = sizeof(*dirEntry) + dirEntry->identifierLen;
 		entryLength = RoundToEven(entryLength);
@@ -703,7 +703,7 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 		// Write size in byte units
 		fprintf(fp, "%-11s|", entry.type != EntryType::EntryDir ? std::to_string(entry.length).c_str() : "");
 		// Write source file path
-		fprintf(fp, "%s\n", entry.srcfile.string().c_str());
+		fprintf(fp, "%s\n", entry.srcfile.generic_string().c_str());
 	};
 
 	int maxlba = 0;

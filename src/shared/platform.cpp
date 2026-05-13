@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <vector>
 #else
-#include <fcntl.h>
+#include <sys/time.h>
 #endif
 
 #ifdef _WIN32
@@ -170,12 +170,11 @@ void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate)
 		CloseHandle(hFile);
 	}
 #else
-	struct timespec times[2];
-	times[0].tv_nsec = UTIME_OMIT;
-
+	struct timeval times[2]{};
+	times[0].tv_sec = time;
 	times[1].tv_sec = time;
-	times[1].tv_nsec = 0;
-	if(0 != utimensat(AT_FDCWD, path.c_str(), times, 0))
+
+	if(0 != utimes(path.c_str(), times))
 	{
 		printf("ERROR: unable to update timestamps for %s\n", path.string().c_str());
 	}
