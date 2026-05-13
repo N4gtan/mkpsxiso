@@ -10,10 +10,9 @@
 #else
 #include <sys/stat.h>
 #define SYSTEM_TIMEZONE timezone
-#if (defined(__APPLE__) && defined(__arm64__)) || (defined(__linux__) && defined(__aarch64__))
-// __DARWIN_ONLY_64_BIT_INO_T is set on ARM-based Macs (which then sets __DARWIN_64_BIT_INO_T).
-// This sets the following in Apple SDK's stat.h: struct stat __DARWIN_STRUCT_STAT64;
-// So use stat over stat64 for ARM-based Macs (ARM-based Linux behaves the same)
+#if defined(__APPLE__) || (defined(__linux__) && defined(__aarch64__))
+// Apple uses 64-bit stat by default since macOS 10.6 on all architectures.
+// AArch64 Linux was built as a 64-bit system by default and also lacks stat64.
 #define stat64 stat
 #endif
 #endif
