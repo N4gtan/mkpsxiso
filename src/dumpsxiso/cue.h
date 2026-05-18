@@ -2,6 +2,8 @@
 
 #include "cdreader.h"
 
+namespace cue
+{
 struct TrackInfo
 {
 	fs::path filePath;
@@ -23,3 +25,4 @@ struct CueFile
 
 CueFile parseCueFile(fs::path& inputFile);
 bool multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &entry, cd::IsoReader &reader, const CueFile &cueFile);
+}

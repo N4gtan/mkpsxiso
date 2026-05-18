@@ -7,21 +7,29 @@
 
 `mkpsxiso` is meant to provide a faster, cross-platform, modern replacement of the BUILDCD from the official development tools. BUILDCD unfortunately only runs on 16 bit DOS compatible systems and it's output format is unusable by modern CD burning tools. Other ISO creation tools such as MKISOFS do not allow controlling the precise order of files (necessary for optimizing access times) and do not support mixed-mode type files for CD streaming such as XA audio and MDEC video streams used by many PlayStation games. `mkpsxiso` outputs either a standard `.bin` and `.cue` or `.iso` ready to burn to CD or use in an emulator! The hope is that `mkpsxiso` tools ease PlayStation homebrew development and ROM hacking and reverse engineer efforts. `mkpsxiso` can also be used as a regular ISO creation tool that complies with the older ISO9660 standard with no Joliet extensions.
 
-`mkpsxiso` can properly license the image with the Sony license data during ISO building eliminating the use of the extra program. However, you must supply your own copy. It can be found in the PsyQ SDK, see [Starting PSX Development](https://psx.arthus.net/starting.html). `dumpsxiso` can also dump the license data of an existing disk.
+`mkpsxiso` can properly license the image with the Sony license data during ISO building eliminating the use of the extra program. However, you must supply your own copy. It can be found in the PsyQ SDK, see [Starting PSX Development](https://psx.arthus.net/starting.html). `dumpsxiso` can also dump the license data of an existing disc.
 
 ## Features
 
+**Almost all images can be rebuilt 1:1 now.**
+
+#### MKPSXISO
 * Uses XML for scripting ISO projects.
-* Outputs ISO images directly to iso or bin+cue image format.
+* Outputs ISO images directly to `.bin`/`.cue` or `.iso` format.
 * Injects license data into ISO image correctly.
-* File LBA controlled by order of files allowing for file seek optimization (just like BUILDCD).
+* Controls file LBA based on file order, allowing for file seek optimization (just like BUILDCD).
 * Supports mixed-mode CD-XA stream files such as XA audio and STR video.
-* Supports CDDA audio tracks from wav, flac, pcm, and mp3 files, both as DA files and just as audio tracks.
-* Can output log of all files packed with details such as LBA, size and timecode offset.
-* Extract CDDA tracks from ISO as wav, flac, and pcm.
-* Almost all images can be rebuilt 1:1 now.
-    * XML generation: by default in strict LBA order, but can instead sort by dir for pretty output.
-    * Timestamps and XA attributes are preserved.
+* Supports CDDA audio tracks from `.wav`, `.flac`, `.pcm`, and `.mp3` files, both as DA files and just as audio tracks.
+* Generates a log of all files with details such as LBA, size, and timecode offset.
+
+#### DUMPSXISO
+* Supports any 2352 sector disc image or a `.cue` file.
+* Extracts CDDA tracks from ISO as `.wav`, `.flac`, or `.pcm`.
+* Extracts disc image license data to a file.
+* Extracts files/data from obfuscated games.
+* Extracts all files as RAW sectors if needed.
+* Generates XML in strict LBA order preserving timestamps and XA attributes (or can sort by dir for pretty output).
+* Generates a standard XML project when given a directory instead of a file.
 
 ## Binary Download
 

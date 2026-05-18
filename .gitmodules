@@ -1,15 +1,20 @@
 [submodule "tinyxml2"]
 	path = tinyxml2
 	url = https://github.com/leethomason/tinyxml2
+	shallow = true
 [submodule "miniaudio"]
 	path = miniaudio
 	url = https://github.com/mackron/miniaudio
+	shallow = true
 [submodule "flac"]
 	path = flac
 	url = https://github.com/xiph/flac
+	shallow = true
 [submodule "ghc"]
 	path = ghc
 	url = https://github.com/gulrak/filesystem
+	shallow = true
 [submodule "threadpool"]
 	path = threadpool
 	url = https://github.com/log4cplus/ThreadPool
+	shallow = true

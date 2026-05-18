@@ -27,7 +27,7 @@ public:
 	}
 
 	template<typename... Args>
-	auto& emplace(Args&&... args)
+	auto& EmplaceBack(Args&&... args)
 	{
 		auto& ref = m_list.emplace_back(std::forward<Args>(args)...);
 		m_view.emplace_back(ref);
@@ -44,6 +44,17 @@ public:
 		size_t length = m_view.size();
 		m_view.clear();
 		m_list.resize(m_list.size() - length);
+	}
+
+	void PopBack()
+	{
+		m_view.pop_back();
+		m_list.pop_back();
+	}
+
+	void RotateBack()
+	{
+		std::rotate(m_view.begin(), m_view.end() - 1, m_view.end());
 	}
 
 	// Access to the view.

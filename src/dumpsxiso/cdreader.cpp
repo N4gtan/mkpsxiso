@@ -305,7 +305,7 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 				{
 					entry->order = order++;
 				}
-				dirEntryList.emplace(std::move(*entry));
+				dirEntryList.EmplaceBack(std::move(*entry));
 			}
 		}
     }
@@ -351,6 +351,12 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	// Strip trailing zeroes, if any
 	entry.identifier.resize(strlen(entry.identifier.c_str()));
 
+	// We don't need a dirty ID, clean it!
+	if ((entry.entry.flags & 0x02) == 0)
+	{
+		entry.identifier = CleanIdentifier(entry.identifier);
+	}
+
 	// ECMA-119 9.1.12 - 00 field present only if file identifier length is an even number
 	if ((entry.entry.identifierLen % 2) == 0)
     {
@@ -392,6 +398,6 @@ void cd::IsoDirEntries::ReadRootDir(cd::IsoReader* reader, int lba)
 	auto entry = ReadEntry(reader);
 	if (entry)
 	{
-		dirEntryList.emplace(std::move(*entry));
+		dirEntryList.EmplaceBack(std::move(*entry));
 	}
 }
