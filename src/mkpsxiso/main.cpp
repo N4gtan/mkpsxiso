@@ -76,9 +76,7 @@ int Main(int argc, char* argv[])
 		"  -lba <file>\t\tGenerate a log of file LBA locations in disc image\n"
 		"  -lbahead <file>\tGenerate a C header of file LBA locations in disc image\n"
 		"  -rebuildxml\t\tRebuild the XML using our newest schema\n"
-		"  -noisogen\t\tDo not generate ISO, but calculate file LBA locations (for use with -lba or -lbahead)\n"
-		"  -noxa\t\t\tDo not generate CD-XA extended file attributes (plain ISO9660)\n"
-		"\t\t\t(XA data can still be included but not recommended)\n";
+		"  -noisogen\t\tDo not generate ISO, but calculate file LBA locations (for use with -lba or -lbahead)\n";
 
 	static constexpr const char* VERSION_TEXT =
 		"MKPSXISO " VERSION " - PlayStation ISO Image Maker\n"
@@ -125,11 +123,6 @@ int Main(int argc, char* argv[])
 			if (ParseArgument(args, "y"))
 			{
 				global::Overwrite = true;
-				continue;
-			}
-			if (ParseArgument(args, "noxa"))
-			{
-				global::noXA = true;
 				continue;
 			}
 			if (auto lbaHead = ParsePathArgument(args, "lbahead"); lbaHead.has_value())

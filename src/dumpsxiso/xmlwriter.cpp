@@ -361,11 +361,14 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 
 	tinyxml2::XMLElement *trackElement = baseElement->InsertNewChildElement(xml::elem::TRACK);
 	trackElement->SetAttribute(xml::attrib::TRACK_TYPE, "data");
-	trackElement->SetAttribute(xml::attrib::XA_EDC, global::xa_edc);
 	trackElement->SetAttribute(xml::attrib::CDVD_STYLE, *global::cdvd_style);
 	if (global::ps2)
 	{
 		trackElement->SetAttribute(xml::attrib::PS2, global::ps2);
+	}
+	if (!global::xa_edc)
+	{
+		trackElement->SetAttribute(xml::attrib::XA_EDC, global::xa_edc);
 	}
 
 	{
