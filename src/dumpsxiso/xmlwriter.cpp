@@ -252,7 +252,7 @@ static void WriteXMLPostGap(const unsigned int postGap, tinyxml2::XMLElement* di
 	{
 		WriteXMLGap(postGap - 1, dirTree, currentLBA);
 		WriteXMLGap(1, dirTree, currentLBA + postGap - 1);
-		dirTree->LastChildElement()->SetAttribute(xml::attrib::ECC_ADDRES, true);
+		dirTree->LastChildElement()->SetAttribute(xml::attrib::ECC_ADDRESS, true);
 	}
 	else
 	{

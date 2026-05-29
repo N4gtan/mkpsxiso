@@ -1587,7 +1587,7 @@ bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* pare
 			dirTree->AddDummyEntry( dirElement->UnsignedAttribute(xml::attrib::NUM_DUMMY_SECTORS),
 									dirElement->UnsignedAttribute(xml::attrib::ENTRY_TYPE),
 									dirElement->UnsignedAttribute(xml::attrib::OFFSET),
-									dirElement->BoolAttribute(xml::attrib::ECC_ADDRES) );
+									dirElement->BoolAttribute(xml::attrib::ECC_ADDRESS) );
         }
 		else if ( CompareICase( "dir", dirElement->Name() ))
 		{
