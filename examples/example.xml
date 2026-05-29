@@ -13,9 +13,9 @@
 		cue_sheet	- File name of the cue sheet for the image file
 					  (Optional, required if more than one track is specified, not needed
 					  if you don't use CD audio in your project).
-		no_xa		- If non zero, creates the image without CD-XA file attributes.
+		no_xa		- Optional, creates the image without CD-XA file attributes. Defaults to 'false'.
 -->
-<iso_project image_name="myimage.bin" cue_sheet="myimage.cue" no_xa="0">
+<iso_project image_name="myimage.bin" cue_sheet="myimage.cue">
 
 	<!-- <track>
 		Specifies a track to the ISO project. This example element creates a data
@@ -26,15 +26,13 @@
 		
 		Attributes:
 			type		- Track type (either data or audio).
-			xa_edc		- For data track only, specifies if the image has (true) or no (false) EDC in Form 2 sectors.
-						  If xa_edc is not specified, defaults to 'true'.
-			cdvd_style	- For data track only, specifies if the image follows Sony CD/DVD-ROM Generator style.
-						  If cdvd_style is not specified, defaults to 'false'.
+			cdvd_style	- For data track only, specifies if the image follows Sony CD/DVD-ROM Generator style instead of CD Generator.
+						  Recommended leave this on 'false' for PS1 CDs and 'true' for PS2 CDs.
 			ps2			- Optional, for data track only, specifies if the image is a Playstation 2 one. Defaults to 'false'.
 			source		- For audio tracks only, specifies the file name of a wav audio file as source data for the audio track.
 			trackid		- For audio tracks only, links the track to a 'da' type file. More details below.
 	-->
-	<track type="data" xa_edc="true" cdvd_style="false">
+	<track type="data" cdvd_style="false">
 	
 		<!-- <identifiers>
 			Optional, Specifies the identifier strings for the data track.
@@ -108,9 +106,6 @@
 								'1': hidden.
 								'2': obfuscated. (Doesn't add the entry to the Directory Record)
 								'3': obfuscated and hidden. (Only for directories)
-					order	- Optional, custom Directory Record order for games with the 'cdvd_style' string on 'true'.
-							  This setting doesn't modify the LBA and is per directory. If order is not specified, defaults to '0'.
-							  So, files/folders with order < 0 will be before the unordered ones and after them the ones with order > 0.
 				
 				Note: Either name or source attribute can be omitted. If only name is specified, it uses
 				that as the name of the source file, and specifying only source strips off the path name
@@ -131,8 +126,6 @@
 							  specified to the <file> elements (optional, can be a relative or absolute path).
 					date	- Optional, custom file timestamp. Format is YYYYMMDDHHMMSS.
 					hidden	- Optional, flag to set files/directories as "hidden" (see above for description).
-					order	- Optional, custom Directory Record order (see above for description).
-						  
 			-->
 			<dir name="mydir">
 			
@@ -178,8 +171,6 @@
 					type	- The dummy's submode value. Values between 0-255 only.
 								 '0': for a Form 1 dummy (0x00). (Default)
 								'32': for a Form 2 dummy (0x20).
-					ecc_addr- Optional, calculates the ECC with the real address instead of a zeroed one. Values 'true' or 'false' only.
-							  This is only usefull for some CD-DA games last DATA postgap sector that has a non-standart ECC calculation.
 			-->
 			<dummy sectors="1024" type="0"/>
 			
