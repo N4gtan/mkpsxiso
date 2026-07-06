@@ -113,7 +113,30 @@ The official documentation explains how to use this tool in detail. If you have 
 
 ## Changelog
 
-**Version 2.20 (24/12/2025)**
+**Version 2.30 (07/06/2026)**
+* Renamed `new_type` XML attribute to `cdvd_style`.
+* Added support for custom timestamps via the `date` XML attribute.
+* Cleaned up and structurally simplified the codebase.
+* Updated documentation to reflect new changes and removed disruptive fields from `example.xml`.
+* Downgraded `Ubuntu` runner to 22.04 and configured `macOS` deployment targets to 10.15 for better compatibility.
+* Improved code compatibility with legacy systems and toolchains; can now be compiled back to `macOS` 10.7 (UNTESTED).
+* dumpsxiso: Added directory input support for generating an XML project from it.
+* dumpsxiso: Added support for the cue `PREGAP` command.
+* dumpsxiso: Defaulted the XML name to the output name.
+* dumpsxiso: Gated `source` attribute generation behind the `--lba` flag.
+* mkpsxiso: Fixed an unsafe relative path conversion regression on Windows.
+* mkpsxiso: Reverted lowercase allowance in the ISO descriptor.
+* mkpsxiso: Improved error handling and ECMA-119 standards enforcement.
+* mkpsxiso: Added support for license override via the `-L` flag.
+* mkpsxiso: Fixed a Windows crash when handling pre-1970 dates on legacy XMLs.
+* mkpsxiso: Restored support for the legacy `srcdir` element.
+* mkpsxiso: Removed the legacy `-noxa` flag.
+* mkpsxiso: Fixed LBA desync when using the `offs` XML attribute between entries without it.
+* mkpsxiso: Fixed default identifiers not being set when XML elements are absent.
+* mkpsxiso: Removed a redundant, noisy warning when a directory `source` is missing.
+* mkpsxiso: Files and subdirectories now automatically inherit the base path from their parent entry if no explicit `source` attribute is specified.
+
+**Version 2.20 (12/24/2025)**
 * Added support for calculating the real address instead of a zeroed one for the last postgap sector of some CD-DA games DATA tracks via the xml `ecc_addr` string.
 * Added support for regenerating correct submode for PS2 CD-ROM games via the xml `ps2` string.
 * Added `--warns` argument to suppress all warnings.

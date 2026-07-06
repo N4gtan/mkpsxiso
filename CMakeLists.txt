@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.25)
 project(
 	mkpsxiso
 	LANGUAGES    CXX
-	VERSION      2.20
+	VERSION      2.30
 	DESCRIPTION  "PlayStation ISO image maker & dumping tool"
 	HOMEPAGE_URL "https://github.com/Lameguy64/mkpsxiso"
 )
