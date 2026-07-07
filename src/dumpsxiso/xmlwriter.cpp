@@ -164,7 +164,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			if (param::lba)
 			{
 				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
-				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
 			if (!param::dir)
 			{
@@ -177,7 +177,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			newelement = dirElement->InsertNewChildElement(xml::elem::DIRECTORY_TREE);
 			if (!param::lba)
 			{
-				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, sourcePath.generic_string().c_str());
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(sourcePath.generic_u8string().c_str()));
 			}
 		}
 
@@ -196,7 +196,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			if (param::lba)
 			{
 				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
-				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, outputPath.generic_string().c_str());
+				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");
 		}
@@ -307,7 +307,7 @@ static void WriteXMLByLBA(const std::list<cd::IsoDirEntries::Entry>& files, tiny
 
 			// "Enter" the directory
 			dirElement = dirElement->InsertNewChildElement("dir");
-			dirElement->SetAttribute(xml::attrib::ENTRY_NAME, part.generic_string().c_str());
+			dirElement->SetAttribute(xml::attrib::ENTRY_NAME, part.string().c_str());
 
 			currentVirtualPath /= part;
 		}
@@ -404,7 +404,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	{
 		if (!global::licenseFile.empty())
 		{
-			global::licenseFile = (srcPath / global::licenseFile).generic_string();
+			global::licenseFile = reinterpret_cast<const char*>((srcPath / global::licenseFile).generic_u8string().c_str());
 		}
 		tinyxml2::XMLElement *newElement = trackElement->InsertNewChildElement(xml::elem::LICENSE);
 		newElement->SetAttribute(xml::attrib::LICENSE_FILE, global::licenseFile.c_str());
@@ -451,7 +451,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 		{
 			newtrack->SetAttribute(xml::attrib::TRACK_ID, dafile->trackid.c_str());
 		}
-		newtrack->SetAttribute(xml::attrib::TRACK_SOURCE, dafile->virtualPath.generic_string().c_str());
+		newtrack->SetAttribute(xml::attrib::TRACK_SOURCE, reinterpret_cast<const char*>(dafile->virtualPath.generic_u8string().c_str()));
 		// only write the pregap element if it's non default
 		if(pregap_sectors != 150)
 		{

@@ -200,13 +200,14 @@ int wmain(int argc, wchar_t* argv[])
 		u8argv.emplace_back(str.data());
 	}
 	u8argv.emplace_back(nullptr);
-	SetConsoleOutputCP(CP_UTF8);
 
+	setlocale(LC_CTYPE, "");
 	return Main(argc, u8argv.data());
 }
 #else
 int main(int argc, char* argv[])
 {
+	setlocale(LC_CTYPE, "");
 	return Main(argc, argv);
 }
 #endif

@@ -181,7 +181,7 @@ std::optional<fs::path> ParsePathArgument(char**& argv, std::string_view command
 		{
 			argv++;
 		}
-		return *argv;
+		return reinterpret_cast<const char8_t*>(*argv);
 	}
 	return std::nullopt;
 }
