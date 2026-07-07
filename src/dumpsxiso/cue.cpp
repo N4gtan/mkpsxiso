@@ -66,7 +66,7 @@ cue::CueFile cue::parseCueFile(fs::path& inputFile)
 			size_t firstQuote = line.find('"');
 			size_t lastQuote = line.rfind('"');
 			std::string fileName(line.substr(firstQuote + 1, lastQuote - firstQuote - 1));
-			filePath.replace_filename(fileName);
+			filePath.replace_filename(reinterpret_cast<const char8_t*>(fileName.c_str()));
 			if (int64_t fileSize = GetSize(filePath); fileSize < 0)
 			{
 				printf("Error: Failed to get the file size for \"%s\"\n", fileName.c_str());

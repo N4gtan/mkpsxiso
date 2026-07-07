@@ -182,7 +182,7 @@ int Main(int argc, char* argv[])
 
 		if ( global::XMLscript.empty() )
 		{
-			global::XMLscript = fs::path(*args).lexically_normal().lexically_proximate(fs::current_path());
+			global::XMLscript = fs::path(reinterpret_cast<const char8_t*>(*args)).lexically_normal().lexically_proximate(fs::current_path());
 		}
 		else
 		{
@@ -645,7 +645,7 @@ int Main(int argc, char* argv[])
 					return EXIT_FAILURE;
 				}
 
-				fs::path trackSource = (global::XMLscript.parent_path() / trackRelativeSource).lexically_normal();
+				fs::path trackSource = (global::XMLscript.parent_path() / reinterpret_cast<const char8_t*>(trackRelativeSource)).lexically_normal();
 				if ( cuefp )
 				{
 					fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
@@ -690,7 +690,7 @@ int Main(int argc, char* argv[])
 				}
 
 				const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
-				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource.string());
+				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource);
 
 				const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
 				if(trackid != nullptr)
@@ -876,7 +876,7 @@ int Main(int argc, char* argv[])
 					// Pack the audio file
 					if ( !global::QuietMode )
 					{
-						printf( "    Packing audio \"%s\"... ", track.source.c_str() );
+						printf( "    Packing audio \"%s\"... ", track.source.string().c_str() );
 						fflush(stdout);
 					}
 
@@ -1029,7 +1029,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 			// Load the file as an XML document
 			{
 				tinyxml2::XMLError error;
-				if (FILE* file = OpenFile(identifierFile, "rb"); file != nullptr)
+				if (FILE* file = OpenFile(reinterpret_cast<const char8_t*>(identifierFile), "rb"); file != nullptr)
 				{
 					error = global::xmlIdFile.LoadFile(file);
 					fclose(file);
@@ -1175,7 +1175,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 			return false;
 		}
 
-		global::LicenseFile = (xmlPath / license_file_attrib).lexically_normal();
+		global::LicenseFile = (xmlPath / reinterpret_cast<const char8_t*>(license_file_attrib)).lexically_normal();
 		gotLicFromXML = true;
 	}
 
@@ -1258,7 +1258,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	const char* dirTreePath = directoryTree->Attribute(xml::attrib::ENTRY_SOURCE);
 	fs::path currentPath = dirTreePath != nullptr && *dirTreePath != 0
-		? (xmlPath / dirTreePath).lexically_normal()
+		? (xmlPath / reinterpret_cast<const char8_t*>(dirTreePath)).lexically_normal()
 		: xmlPath;
 
 	iso::DIRENTRY& root = iso::DirTreeClass::CreateRootDirectory(entries, volumeDate, ReadEntryAttributes(defaultAttributes, directoryTree));
@@ -1315,7 +1315,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 	std::string name;
 	if ( sourceElement != nullptr && *sourceElement != 0 )
 	{
-		srcFile = (xmlPath / sourceElement).lexically_normal();
+		srcFile = (xmlPath / reinterpret_cast<const char8_t*>(sourceElement)).lexically_normal();
 
 		if ( nameElement != nullptr && *nameElement != 0 )
 		{
@@ -1455,11 +1455,11 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 			if(sourceElement == nullptr || *sourceElement == 0)
 			{
 				// Safe cast, the root object is mutable. Casting here to modify the attribute without refactoring the entire call chain.
-				const_cast<tinyxml2::XMLElement*>(trackElement)->SetAttribute(xml::attrib::ENTRY_SOURCE, srcFile.string().c_str());
+				const_cast<tinyxml2::XMLElement*>(trackElement)->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(srcFile.generic_u8string().c_str()));
 			}
 			else
 			{
-				srcFile = (xmlPath / sourceElement).lexically_normal();
+				srcFile = (xmlPath / reinterpret_cast<const char8_t*>(sourceElement)).lexically_normal();
 			}
 		}
 		else
@@ -1486,7 +1486,7 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 	std::string name;
 	if (const char *sourceElement = dirElement->Attribute(xml::attrib::ENTRY_SOURCE); sourceElement != nullptr && *sourceElement != 0)
 	{
-		srcDir = (xmlPath / sourceElement).lexically_normal();
+		srcDir = (xmlPath / reinterpret_cast<const char8_t*>(sourceElement)).lexically_normal();
 	}
 
 	if (const char *nameElement = dirElement->Attribute(xml::attrib::ENTRY_NAME); nameElement != nullptr && *nameElement != 0)

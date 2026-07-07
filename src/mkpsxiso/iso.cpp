@@ -703,7 +703,7 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 		// Write size in byte units
 		fprintf(fp, "%-11s|", entry.type != EntryType::EntryDir ? std::to_string(entry.length).c_str() : "");
 		// Write source file path
-		fprintf(fp, "%s\n", entry.srcfile.generic_string().c_str());
+		fprintf(fp, "%s\n", reinterpret_cast<const char*>(entry.srcfile.generic_u8string().c_str()));
 	};
 
 	int maxlba = 0;
