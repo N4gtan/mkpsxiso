@@ -15,9 +15,15 @@ bool cue::multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Ent
 
 cue::CueFile cue::parseCueFile(fs::path& inputFile)
 {
+	unique_file file = OpenScopedFile(inputFile, "r");
+	if (file == nullptr)
+	{
+		printf("ERROR: Cannot open file \"%s\"\n", inputFile.string().c_str());
+		exit(EXIT_FAILURE);
+	}
+
 	CueFile cueFile;
 	std::string fileType;
-	unique_file file = OpenScopedFile(inputFile, "r");
 	fs::path filePath = inputFile;
 	int fileSectors;
 	int lineNumber = 1;
