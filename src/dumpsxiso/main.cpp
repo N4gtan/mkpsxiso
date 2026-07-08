@@ -587,7 +587,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				// The source file will anyway be stored on our hard drive in raw form.
 				if (!param::QuietMode)
 				{
-					printf("    Extracting XA \"%s\"... ", outputPath.string().c_str());
+					printf("    Extracting XA \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
 				}
 				fflush(stdout);
 
@@ -595,7 +595,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 
 				if (outFile == NULL || !reader.SeekToSector(entry.entry.entryOffs.lsb))
 				{
-					printf("\nERROR: Cannot create file \"%s\"\n", outputPath.filename().string().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
 
@@ -643,8 +643,8 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 
 				if (isInvalid && !param::noWarns)
 				{
-					printf( "\nWARNING: The CDDA file \"%s\" is out of the iso file bounds.\n"
-							"\t This usually means that the game has audio tracks, and they are on separate files.\n", daOutPath.filename().string().c_str() );
+					printf( "\nWARNING: The CDDA file \"%" PRFILESYSTEM_PATH "\" is out of the iso file bounds.\n"
+							"\t This usually means that the game has audio tracks, and they are on separate files.\n", daOutPath.filename().c_str() );
 					if (global::cueFile.tracks.empty())
 					{
 						printf("\t Try using a .cue file, instead of an ISO image, to be able to access those files.\n");
@@ -659,12 +659,12 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				}
 				else if (!param::QuietMode)
 				{
-					printf("    Extracting audio \"%s\"... ", daOutPath.string().c_str());
+					printf("    Extracting audio \"%" PRFILESYSTEM_PATH "\"... ", daOutPath.c_str());
 				}
 				fflush(stdout);
 
 				if (!outFile) {
-					printf("\nERROR: Cannot create file \"%s\"\n", daOutPath.filename().string().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", daOutPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
 
@@ -697,7 +697,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				// Extract regular file
 				if (!param::QuietMode)
 				{
-					printf("    Extracting \"%s\"... ", outputPath.string().c_str());
+					printf("    Extracting \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
 					fflush(stdout);
 				}
 
@@ -706,7 +706,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				FILE* outFile = OpenFile(outputPath, "wb");
 
 				if (outFile == NULL) {
-					printf("\nERROR: Cannot create file \"%s\"\n", outputPath.filename().string().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
 
@@ -780,7 +780,7 @@ void ParseDIR()
 	{
 		if (level > CdlMAXLEVEL)
 		{
-			printf("\nERROR: Exceeded maximum directory hierarchy depth levels (%d) at \"%s\"\n", CdlMAXLEVEL, path.string().c_str());
+			printf("\nERROR: Exceeded maximum directory hierarchy depth levels (%d) at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXLEVEL, path.c_str());
 			exit(EXIT_FAILURE);
 		}
 
@@ -790,7 +790,7 @@ void ParseDIR()
 		auto iterator = fs::directory_iterator(path, ec);
 		if (ec)
 		{
-			printf("\nERROR: Cannot read directory \"%s\". %s\n", path.string().c_str(), ec.message().c_str());
+			printf("\nERROR: Cannot read directory \"%" PRFILESYSTEM_PATH "\". %s\n", path.c_str(), ec.message().c_str());
 			exit(EXIT_FAILURE);
 		}
 
@@ -821,7 +821,7 @@ void ParseDIR()
 			{
 				if (--dirCount == -1)
 				{
-					printf("\nWARNING: Exceeded maximum directories (%d) for LIBCD CdSearchFile() at \"%s\"\n", CdlMAXDIR, path.string().c_str());
+					printf("\nWARNING: Exceeded maximum directories (%d) for LIBCD CdSearchFile() at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXDIR, path.c_str());
 					exit(EXIT_FAILURE);
 				}
 				entry.type	 = EntryType::EntryDir;
@@ -831,7 +831,7 @@ void ParseDIR()
 			{
 				if (--fileCount == -1)
 				{
-					printf("\nWARNING: Exceeded maximum files per directory (%d) for LIBCD CdSearchFile() at \"%s\"\n", CdlMAXFILE, path.string().c_str());
+					printf("\nWARNING: Exceeded maximum files per directory (%d) for LIBCD CdSearchFile() at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXFILE, path.c_str());
 					exit(EXIT_FAILURE);
 				}
 				if (std::string ext = fsEntry.path().extension().string(); CompareICase(ext, ".xa") || CompareICase(ext, ".str"))
@@ -855,7 +855,7 @@ void ParseDIR()
 	memcpy(&descriptor.applicationIdentifier, "PLAYSTATION", sizeof("PLAYSTATION"));
 
 	if (!param::QuietMode)
-		printf("\nParsing directory \"%s\"... Done.\n", param::outPath.string().c_str());
+		printf("\nParsing directory \"%" PRFILESYSTEM_PATH "\"... Done.\n", param::outPath.c_str());
 
 	// Create root
 	std::list<cd::IsoDirEntries::Entry> entries;
@@ -955,7 +955,7 @@ void ParseISO(cd::IsoReader& reader) {
 		fs::create_directories(dirPath, ec);
 		if (ec)
 		{
-			printf("\nERROR: Cannot create directory \"%s\". %s\n", dirPath.parent_path().string().c_str(), ec.message().c_str());
+			printf("\nERROR: Cannot create directory \"%" PRFILESYSTEM_PATH "\". %s\n", dirPath.parent_path().c_str(), ec.message().c_str());
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -964,7 +964,7 @@ void ParseISO(cd::IsoReader& reader) {
 	{
 		if (!param::noxml)
 		{
-			printf("\n    License file: \"%s\"\n", (param::outPath / "license_data.dat").string().c_str());
+			printf("\n    License file: \"%" PRFILESYSTEM_PATH "\"\n", (param::outPath / "license_data.dat").c_str());
 		}
 		printf("\n    Parsing directory tree...\n");
 	}
@@ -1252,7 +1252,7 @@ int Main(int argc, char *argv[])
 
 	if (!reader.Open(param::isoFile)) {
 
-		printf("ERROR: Cannot open file \"%s\"\n", param::isoFile.string().c_str());
+		printf("ERROR: Cannot open file \"%" PRFILESYSTEM_PATH "\"\n", param::isoFile.c_str());
 		return EXIT_FAILURE;
 
 	}
@@ -1269,7 +1269,7 @@ int Main(int argc, char *argv[])
 
 	if (!param::QuietMode)
 	{
-		printf("Output directory : \"%s\"\n\n", param::outPath.string().c_str());
+		printf("Output directory : \"%" PRFILESYSTEM_PATH "\"\n\n", param::outPath.c_str());
 	}
 
 	tzset(); // Initializes the time-related environment variables

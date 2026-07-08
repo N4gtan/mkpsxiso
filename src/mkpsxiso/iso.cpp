@@ -127,7 +127,7 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 			printf("      ");
 		}
 
-		printf("ERROR: File not found: %s\n", srcfile.string().c_str());
+		printf("ERROR: File not found: %" PRFILESYSTEM_PATH "\n", srcfile.c_str());
 		return false;
     }
 
@@ -155,7 +155,7 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 				printf("      ");
 			}
 
-			printf("ERROR: %s is a WAV or is not properly ripped.\n", srcfile.string().c_str());
+			printf("ERROR: %" PRFILESYSTEM_PATH " is a WAV or is not properly ripped.\n", srcfile.c_str());
 
 			return false;
 		}
@@ -174,8 +174,8 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 					printf("      ");
 				}
 
-				printf("ERROR: %s is not a multiple of 2336 or 2048 bytes.\n",
-					srcfile.string().c_str());
+				printf("ERROR: %" PRFILESYSTEM_PATH " is not a multiple of 2336 or 2048 bytes.\n",
+					srcfile.c_str());
 
 				return false;
 			}
@@ -567,7 +567,7 @@ void iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 		{
 			if ( !global::QuietMode )
 			{
-				printf( "    Packing \"%s\"... ", entry.srcfile.string().c_str() );
+				printf( "    Packing \"%" PRFILESYSTEM_PATH "\"... ", entry.srcfile.c_str() );
 				fflush(stdout);
 			}
 
@@ -587,7 +587,7 @@ void iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 		{
 			if ( !global::QuietMode )
 			{
-				printf( "    Packing XA \"%s\"... ", entry.srcfile.string().c_str() );
+				printf( "    Packing XA \"%" PRFILESYSTEM_PATH "\"... ", entry.srcfile.c_str() );
 				fflush(stdout);
 			}
 
@@ -606,7 +606,7 @@ void iso::DirTreeClass::WriteFiles(cd::IsoWriter* writer) const
 		{
 			if ( !global::QuietMode )
 			{
-				printf( "    Packing XA-DO \"%s\"... ", entry.srcfile.string().c_str() );
+				printf( "    Packing XA-DO \"%" PRFILESYSTEM_PATH "\"... ", entry.srcfile.c_str() );
 				fflush(stdout);
 			}
 

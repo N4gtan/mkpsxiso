@@ -1,5 +1,6 @@
 #include "xmlwriter.h"
 #include "xml.h"
+#include "platform.h"
 #include <map>
 
 namespace param
@@ -349,7 +350,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	unique_file file = OpenScopedFile(param::xmlFile, "wb");
 	if (file == nullptr)
 	{
-		printf("\nERROR: Cannot create xml file \"%s\". %s\n", param::xmlFile.string().c_str(), strerror(errno));
+		printf("\nERROR: Cannot create xml file \"%" PRFILESYSTEM_PATH "\". %s\n", param::xmlFile.c_str(), strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
