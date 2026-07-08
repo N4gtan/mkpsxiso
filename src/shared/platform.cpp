@@ -201,7 +201,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 	u8argv.emplace_back(nullptr);
 
-	setlocale(LC_CTYPE, "");
+	setlocale(LC_CTYPE, ".UTF8");
 	return Main(argc, u8argv.data());
 }
 #else
