@@ -18,7 +18,7 @@ cue::CueFile cue::parseCueFile(fs::path& inputFile)
 	unique_file file = OpenScopedFile(inputFile, "r");
 	if (file == nullptr)
 	{
-		printf("ERROR: Cannot open file \"%s\"\n", inputFile.string().c_str());
+		printf("ERROR: Cannot open file \"%" PRFILESYSTEM_PATH "\"\n", inputFile.c_str());
 		exit(EXIT_FAILURE);
 	}
 

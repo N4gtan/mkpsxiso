@@ -164,7 +164,7 @@ void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate)
 		const FILETIME ft = TimetToFileTime(time);
 		if(0 == SetFileTime(hFile, &ft, nullptr, &ft))
 		{
-			printf("ERROR: unable to update timestamps for %s\n", path.string().c_str());
+			printf("ERROR: unable to update timestamps for %ls\n", path.c_str());
 		}
 
 		CloseHandle(hFile);
@@ -176,7 +176,7 @@ void UpdateTimestamps(const fs::path& path, const cd::ISO_DATESTAMP& entryDate)
 
 	if(0 != utimes(path.c_str(), times))
 	{
-		printf("ERROR: unable to update timestamps for %s\n", path.string().c_str());
+		printf("ERROR: unable to update timestamps for %s\n", path.c_str());
 	}
 #endif
 }
@@ -201,7 +201,7 @@ int wmain(int argc, wchar_t* argv[])
 	}
 	u8argv.emplace_back(nullptr);
 
-	setlocale(LC_CTYPE, "");
+	setlocale(LC_CTYPE, ".UTF8");
 	return Main(argc, u8argv.data());
 }
 #else
