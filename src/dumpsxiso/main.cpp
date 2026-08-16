@@ -2,6 +2,7 @@
 #include "xmlwriter.h"
 #include "cue.h"
 #include <array>
+#include <span>
 
 #ifndef MKPSXISO_NO_LIBFLAC
 #include "FLAC/stream_encoder.h"
@@ -207,7 +208,7 @@ void writeWaveFile(FILE *outFile, cd::IsoReader& reader, const size_t cddaSize, 
 }
 
 #ifndef MKPSXISO_NO_LIBFLAC
-void writeFLACFile(FILE *outFile, cd::IsoReader& reader, const int cddaSize, const bool isInvalid)
+void writeFLACFile(FILE *outFile, const size_t cddaSize, std::span<uint8_t> copyBuff, const bool isInvalid)
 {
 	FLAC__bool ok = true;
 	FLAC__StreamEncoder *encoder = 0;
@@ -244,28 +245,40 @@ void writeFLACFile(FILE *outFile, cd::IsoReader& reader, const int cddaSize, con
 
     {
     size_t left = (size_t)total_samples;
-	size_t max_pcmframe_read = CD_SECTOR_SIZE / (channels * (bps/8));
+	size_t max_pcmframe_read = copyBuff.size() / (channels * (bps/8));
 
     std::unique_ptr<int32_t[]> pcm(new int32_t[channels * max_pcmframe_read]);
-	while (left && ok) {
+	auto encodeLoop = [&](auto IsValid)
+	{
+		while (left && ok) {
+			size_t need = std::min(left, max_pcmframe_read);
+			if constexpr (IsValid)
+			{
+				size_t needBytes = need * (channels * (bps/8));
+				cd::reader->ReadBytesDA(copyBuff.data(), needBytes);
 
-		unsigned char copyBuff[CD_SECTOR_SIZE]{};
-
-		size_t need = (left > max_pcmframe_read ? max_pcmframe_read : left);
-		size_t needBytes = need * (channels * (bps/8));
-		if(!isInvalid)
-			reader.ReadBytesDA(copyBuff, needBytes);
-
-    	/* convert the packed little-endian 16-bit PCM samples from WAVE into an interleaved FLAC__int32 buffer for libFLAC */
-		for(size_t i = 0; i < need*channels; i++)
-		{
-			/* inefficient but simple and works on big- or little-endian machines */
-			pcm[i] = (FLAC__int32)(((FLAC__int16)(FLAC__int8)copyBuff[2*i+1] << 8) | (FLAC__int16)copyBuff[2*i]);
+				/* convert the packed little-endian 16-bit PCM samples from WAVE into an interleaved FLAC__int32 buffer for libFLAC */
+				for(size_t i = 0; i < need*channels; i++)
+				{
+					/* inefficient but simple and works on big- or little-endian machines */
+					pcm[i] = (FLAC__int32)(((FLAC__int16)(FLAC__int8)copyBuff[2*i+1] << 8) | (FLAC__int16)copyBuff[2*i]);
+				}
+			}
+			/* feed samples to encoder */
+			ok = FLAC__stream_encoder_process_interleaved(encoder, pcm.get(), need);
+			left -= need;
 		}
-		/* feed samples to encoder */
-		ok = FLAC__stream_encoder_process_interleaved(encoder, pcm.get(), need);
-		left -= need;
-    }
+	};
+
+	if (!isInvalid) [[likely]]
+	{
+		encodeLoop(std::true_type{});
+	}
+	else
+	{
+		memset(pcm.get(), 0, channels * max_pcmframe_read * sizeof(int32_t));
+		encodeLoop(std::false_type{});
+	}
     }
 	ok &= FLAC__stream_encoder_finish(encoder); // closes outFile
 	if(!ok)
@@ -640,7 +653,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				if (param::encodingFormat == EAF_FLAC)
 				{
 					// libflac closes outFile
-					writeFLACFile(outFile.release(), reader, cddaSize, isInvalid);
+					writeFLACFile(outFile.release(), cddaSize, *copyBuff, isInvalid);
 				}
 				else
 #endif
