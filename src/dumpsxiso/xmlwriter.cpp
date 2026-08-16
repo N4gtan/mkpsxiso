@@ -272,7 +272,7 @@ static void WriteXMLByLBA(const std::list<cd::IsoDirEntries::Entry>& files, tiny
 			}
 			expectedLBA = entry.entry.entryOffs.lsb + GetSizeInSectors(entry.entry.entrySize.lsb);
 		}
-		else if (entry.trackid.empty())
+		else if ((entry.entry.flags & 0x20) != 0)
 		{
 			continue; // Skip if it's an unreferenced DA file
 		}
@@ -337,7 +337,7 @@ static void WriteXMLByDirectories(const cd::IsoDirEntries* directory, tinyxml2::
 	}
 }
 
-unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd::IsoDirEntries::Entry>& entries, const std::list<cd::IsoDirEntries::Entry*>& DAfiles,
+unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd::IsoDirEntries::Entry>& entries, const std::vector<cd::IsoDirEntries::Entry*>& DAfiles,
 	const unsigned postGap)
 {
 	unique_file file = OpenScopedFile(param::xmlFile, "wb");
@@ -436,19 +436,13 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd:
 	// Write CD-DA tracks
 	tinyxml2::XMLNode *modifyProject = trackElement->Parent();
 	tinyxml2::XMLElement *addAfter = trackElement;
-	for(const auto& dafile : DAfiles)
+	for(const auto* dafile : DAfiles)
 	{
-		// SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
-		unsigned pregap_sectors = 150;
-		if(dafile->entry.entryOffs.lsb != currentLBA)
-		{
-			pregap_sectors = dafile->entry.entryOffs.lsb - currentLBA;
-			currentLBA += pregap_sectors;
-		}
-		currentLBA += GetSizeInSectors(dafile->entry.entrySize.lsb);
+		unsigned pregap_sectors = dafile->entry.entryOffs.lsb - currentLBA;
+		currentLBA += pregap_sectors + GetSizeInSectors(dafile->entry.entrySize.lsb);
 		tinyxml2::XMLElement *newtrack = xmldoc.NewElement(xml::elem::TRACK);
 		newtrack->SetAttribute(xml::attrib::TRACK_TYPE, "audio");
-		if (!dafile->trackid.empty())
+		if ((dafile->entry.flags & 0x20) == 0)
 		{
 			newtrack->SetAttribute(xml::attrib::TRACK_ID, dafile->trackid.c_str());
 		}

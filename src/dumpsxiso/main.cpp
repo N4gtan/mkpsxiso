@@ -395,9 +395,9 @@ std::unique_ptr<cd::IsoDirEntries> ParseRoot(cd::IsoReader& reader, ListView<cd:
 	return dirEntries;
 }
 
-std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries)
+std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entries)
 {
-	std::list<cd::IsoDirEntries::Entry*> DAfiles;
+	std::vector<cd::IsoDirEntries::Entry*> DAfiles;
 	unsigned tracknum = 2;
 
 	// Get referenced DA files and assign them an ID number
@@ -413,15 +413,13 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 
 	if (tracknum <= global::cueFile.tracks.size())
 	{
-		std::vector<cd::IsoDirEntries::Entry> unrefDAbuff;
-		// Create a buffer of unreferenced DA tracks
 		for(const auto& track : global::cueFile.tracks)
 		{
 			// Skip non audio tracks
 			if (track.type != "AUDIO")
 				continue;
 			// Skip referenced DA tracks
-			if (tracknum > 2 && std::any_of(DAfiles.begin(), DAfiles.end(), [&track](const auto& entry)
+			if (tracknum > 2 && std::any_of(DAfiles.begin(), DAfiles.end(), [&track](const auto* entry)
 									{
 										return entry->entry.entryOffs.lsb == track.startSector;
 									}))
@@ -429,10 +427,12 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 				continue;
 			}
 
-			// Add the unreferenced DA track to the buffer
-			auto& entry = unrefDAbuff.emplace_back();
+			// Add the unreferenced DA track to entries for further extraction
+			auto& entry = entries.emplace_back();
 			entry.entry.entryOffs.lsb = track.startSector;
 			entry.entry.entrySize.lsb = track.sizeInSectors * F1_DATA_SIZE;
+			entry.entry.flags = 0x20; // We are setting the reserved bit 5 to simulate obfuscation
+			FormatTo(entry.trackid, "%02zu", DAfiles.size() + 2);
 			entry.virtualPath = GetEncodedDAPath("TRACK-" + track.number);
 			entry.identifier = entry.virtualPath.string();
 			entry.type = EntryType::EntryDA;
@@ -450,32 +450,24 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 				entry.entry.entryOffs.lsb--;
 				entry.entry.entrySize.lsb += F1_DATA_SIZE;
 			}
-		}
 
-		// Add unreferenced DA tracks to entries for further extraction
-		for (auto& entry : unrefDAbuff)
-		{
-			entries.emplace_back(std::move(entry));
-			DAfiles.push_back(&entries.back());
+			DAfiles.push_back(&entry);
 		}
-
-		// Sort DA files by LBA
-		DAfiles.sort([](const auto& left, const auto& right)
-			{
-				return left->entry.entryOffs.lsb < right->entry.entryOffs.lsb;
-			});
 
 		// Only recalculate the track id's if there were unreferenced tracks among the referenced ones
-		// This is just for a prettier XML sort, because unsorted track id's have no impact at build time
 		if (tracknum > 2)
 		{
-			tracknum = 2;
-			for(const auto& entry : DAfiles)
-			{
-				if(!entry->trackid.empty())
+			// Sort DA files by LBA
+			std::sort(DAfiles.begin(), DAfiles.end(), [](const auto* left, const auto* right)
 				{
-					FormatTo(entry->trackid, "%02u", tracknum++);
-				}
+					return left->entry.entryOffs.lsb < right->entry.entryOffs.lsb;
+				});
+
+			tracknum = 2;
+			for (auto* entry : DAfiles)
+			{
+				entry->trackid.clear();
+				FormatTo(entry->trackid, "%02u", tracknum++);
 			}
 		}
 
@@ -712,7 +704,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 	// else directories will have their timestamps discarded when files are being unpacked into them!
 	for (const auto& entry : files)
 	{
-		if(entry.trackid.empty())
+		if ((entry.entry.flags & 0x20) != 0)
 			continue; // Skip unreferenced entries
 
 		fs::path toChange(rootPath / entry.virtualPath);
@@ -731,7 +723,7 @@ void ParseDIR()
 	// 128 = (2048 / 16) * 1;		 1 path table sector for directories (16 bytes max average entry, including the root entry).
 	// So, using names longer than 8.3 will decrease this limit even further.
 
-	int postGap	 = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, postgap should be always >= 150 sectors.
+	int daCount	 = 0; // DA files counter
 	int dirCount = CdlMAXDIR - 1; // Reserve one for root
 	auto ParseSubDIR = [&](auto &&self, ListView<cd::IsoDirEntries::Entry> view, const fs::path &path, int fileCount, int level) -> std::unique_ptr<cd::IsoDirEntries>
 	{
@@ -792,7 +784,7 @@ void ParseDIR()
 				else if (CompareICase(ext, ".wav") || CompareICase(ext, ".flac") || CompareICase(ext, ".pcm") || CompareICase(ext, ".mp3"))
 				{
 					entry.type = EntryType::EntryDA;
-					entry.entry.entryOffs.lsb = ++postGap; // Do not change. Used only to avoid calculating deltas at XML write time
+					entry.entry.entryOffs.lsb = 151 * ++daCount + 150; // Do not change. Used only to compute proper deltas at XML write time
 				}
 				else
 				{
@@ -830,7 +822,7 @@ void ParseDIR()
 
 	// Write XML sorted by directories
 	param::outputSortedByDir  = true;
-	xml::WriteXML(descriptor, entries, DAfiles, postGap - DAfiles.size());
+	xml::WriteXML(descriptor, entries, DAfiles, 150); // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, postgap should be always >= 150 sectors.
 	if (!param::QuietMode)
 	{
 		printf("Done.\n");
@@ -980,7 +972,7 @@ void ParseISO(cd::IsoReader& reader) {
 		printf("      Total file system size: %u bytes (%u sectors)\n", endFS * CD_SECTOR_SIZE, endFS);
 
 		int tracknum = 2;
-		for(const auto& entry : DAfiles)
+		for (const auto* entry : DAfiles)
 		{
 			printf("\n  Track #%d audio:\n", tracknum);
 			printf("    DA File \"%s\"\n", entry->identifier.c_str());

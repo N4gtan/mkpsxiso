@@ -395,7 +395,6 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	// Add the EntryType here so as to not keep calculating it everytime later
 	// Check for file number first to determine if it's a STR/XA file, because some games (Mega Man X3) has flagged them as DATA but currently they are not
 	entry.type = entry.extData.filenum ? EntryType::EntryXA : GetXAEntryType((entry.extData.attributes & cdxa::XA_ATTRIBUTES_MASK) >> 8);
-	entry.trackid = "01"; // This helps detect unreferenced entries more easily
 
 	return entry;
 }
