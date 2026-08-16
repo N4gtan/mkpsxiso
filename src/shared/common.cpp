@@ -150,6 +150,11 @@ bool CompareICase(std::string_view strLeft, std::string_view strRight)
 		});
 }
 
+std::string_view U8ToSv(std::u8string_view str)
+{
+	return std::string_view(reinterpret_cast<const char *>(str.data()), str.length());
+}
+
 bool ParseArgument(char** argv, std::string_view command, std::string_view longCommand)
 {
 	const std::string_view arg(*argv);
@@ -175,7 +180,7 @@ std::optional<fs::path> ParsePathArgument(char**& argv, std::string_view command
 		{
 			argv++;
 		}
-		return reinterpret_cast<const char8_t*>(*argv);
+		return ARGV_PATH(*argv);
 	}
 	return std::nullopt;
 }

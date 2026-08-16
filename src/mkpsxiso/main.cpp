@@ -182,7 +182,7 @@ int Main(int argc, char* argv[])
 
 		if ( global::XMLscript.empty() )
 		{
-			global::XMLscript = fs::path(reinterpret_cast<const char8_t*>(*args)).lexically_normal().lexically_proximate(fs::current_path());
+			global::XMLscript = ARGV_PATH(*args).lexically_normal().lexically_proximate(fs::current_path());
 		}
 		else
 		{
@@ -436,7 +436,7 @@ int Main(int argc, char* argv[])
 		{
 			if ( const char* image_name = projectElement->Attribute(xml::attrib::IMAGE_NAME); image_name != nullptr && *image_name != 0 )
 			{
-				global::ImageName = image_name;
+				global::ImageName = reinterpret_cast<const char8_t*>(image_name);
 			}
 			else
 			{
@@ -450,7 +450,7 @@ int Main(int argc, char* argv[])
 		{
 			if ( const char* cue_sheet = projectElement->Attribute(xml::attrib::CUE_SHEET); cue_sheet != nullptr )
 			{
-				global::cuefile = cue_sheet;
+				global::cuefile = reinterpret_cast<const char8_t*>(cue_sheet);
 			}
 		}
 
@@ -1344,7 +1344,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 		else
 		{
-			name = srcFile.filename().string();
+			name = U8ToSv(srcFile.filename().u8string());
 		}
 	}
 	else
@@ -1520,7 +1520,7 @@ static bool ParseDirEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement
 	}
 	else if (!srcDir.empty())
 	{
-		name = srcDir.filename().string();
+		name = U8ToSv(srcDir.filename().u8string());
 	}
 	else
 	{

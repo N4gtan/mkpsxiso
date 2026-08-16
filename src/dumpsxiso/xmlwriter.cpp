@@ -400,7 +400,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	{
 		if (!global::licenseFile.empty())
 		{
-			global::licenseFile = reinterpret_cast<const char*>((srcPath / global::licenseFile).generic_u8string().c_str());
+			global::licenseFile = U8ToSv((srcPath / global::licenseFile).generic_u8string());
 		}
 		tinyxml2::XMLElement *newElement = trackElement->InsertNewChildElement(xml::elem::LICENSE);
 		newElement->SetAttribute(xml::attrib::LICENSE_FILE, global::licenseFile.c_str());

@@ -821,7 +821,6 @@ void ParseDIR()
 				if (--dirCount == -1)
 				{
 					printf("\nWARNING: Exceeded maximum directories (%d) for LIBCD CdSearchFile() at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXDIR, path.c_str());
-					exit(EXIT_FAILURE);
 				}
 				entry.type	 = EntryType::EntryDir;
 				entry.subdir = self(self, dirEntries->dirEntryList.NewView(), fsEntry.path(), CdlMAXFILE, level + 1);
@@ -831,7 +830,6 @@ void ParseDIR()
 				if (--fileCount == -1)
 				{
 					printf("\nWARNING: Exceeded maximum files per directory (%d) for LIBCD CdSearchFile() at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXFILE, path.c_str());
-					exit(EXIT_FAILURE);
 				}
 				if (std::string ext = fsEntry.path().extension().string(); CompareICase(ext, ".xa") || CompareICase(ext, ".str"))
 				{
@@ -1202,7 +1200,7 @@ int Main(int argc, char *argv[])
 
 		if (param::isoFile.empty())
 		{
-			param::isoFile = fs::path(reinterpret_cast<const char8_t*>(*args)).lexically_normal().lexically_proximate(fs::current_path());
+			param::isoFile = ARGV_PATH(*args).lexically_normal().lexically_proximate(fs::current_path());
 		}
 		else
 		{

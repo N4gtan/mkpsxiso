@@ -84,6 +84,7 @@ unique_file OpenScopedFile(const fs::path& path, const char* mode);
 
 // Helper functions for string manipulation
 bool CompareICase(std::string_view strLeft, std::string_view strRight);
+std::string_view U8ToSv(std::u8string_view str);
 
 // Argument parsing
 bool ParseArgument(char** argv, std::string_view command, std::string_view longCommand = std::string_view{});
