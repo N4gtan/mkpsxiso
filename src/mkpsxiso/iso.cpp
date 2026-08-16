@@ -62,7 +62,7 @@ static cd::ISO_DATESTAMP GetISODateStamp(time_t time, signed char GMToffs, const
 	return result;
 }
 
-int iso::DirTreeClass::GetAudioSize(const fs::path& audioFile)
+static int GetAudioSize(const fs::path& audioFile)
 {
 	ma_decoder decoder;
 	VirtualWav vw;
@@ -218,6 +218,10 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 	if ( type == EntryType::EntryDA )
 	{
 		entry.length = GetAudioSize( entry.srcfile );
+		if (entry.length == 0)
+		{
+			return false;
+		}
 		entry.trackid = trackid;
 	}
 	else

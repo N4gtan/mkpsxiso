@@ -159,20 +159,20 @@
 			
 			<!-- <dummy>
 				Specifies an invisible dummy file to be generated into the file system. Use this to
-				add dummy sectors, usually at the end of the file system portion of the image to avoid
-				the possibility of 'drive runaway' which can damage a drive mechanism.
+				add dummy sectors, usually a 150 one at the end of the file system portion of the image
+				to avoid the possibility of 'drive runaway' which can damage a drive mechanism.
 				
 				The dummy file is completely invisible as it is not added into the directory records
 				of the ISO image entirely which ensures a clean directory structure when the file system is
 				viewed on a file browser.
 				
 				Attributes:
-					sectors	- Size of dummy file in sector units (1024 = 2MB).
-					type	- The dummy's submode value. Values between 0-255 only.
+					sectors	- Size of dummy file in sector units (150 = 300KiB).
+					type	- Optional, dummy submode type.
 								 '0': for a Form 1 dummy (0x00). (Default)
 								'32': for a Form 2 dummy (0x20).
 			-->
-			<dummy sectors="1024" type="0"/>
+			<dummy sectors="150" type="0"/>
 			
 			<!-- Sample DA audio file entry.
 			

@@ -510,8 +510,8 @@ int Main(int argc, char* argv[])
 		iso::DirTreeClass* dirTree = nullptr;
 		int totalLenLBA = 0;
 
-		std::vector<cdtrack> audioTracks;
-		iso::EntryList unrefTracks;
+		bool hasDataTrack = false;
+		std::vector<iso::DIRENTRY*> audioTracks;
 		std::string cueSheet = Format<4096>( "FILE \"%s\" BINARY\n", global::ImageName.filename().u8string().c_str() );
 
 		// Parse tracks
@@ -570,11 +570,22 @@ int Main(int argc, char* argv[])
 
 					return EXIT_FAILURE;
 				}
+				hasDataTrack = true;
 
 				dirTree = ParseISOfileSystem( trackElement, global::XMLscript.parent_path(), entries, isoIdentifiers, totalLenLBA );
 				if ( dirTree == nullptr )
 				{
 					return EXIT_FAILURE;
+				}
+
+				if ( totalLenLBA < (2 * 75) && !global::noWarns )
+				{
+					printf( "WARNING: System duration < 2 seconds. It's recommended to set <dummy sectors=\"150\"/>\n"
+							"         at the end of <%s>; otherwise, the burner might reject the image!\n\n", xml::elem::DIRECTORY_TREE );
+				}
+				else if ( totalLenLBA > (71 * 60 * 75) && !global::noWarns )
+				{
+					printf( "WARNING: System duration > 71 minutes\n\n" );
 				}
 
 				FormatTo( cueSheet,	"  TRACK %02d MODE2/2352\n"
@@ -618,7 +629,7 @@ int Main(int argc, char* argv[])
 				FormatTo( cueSheet, "  TRACK %02d AUDIO\n", global::trackNum );
 
 				// pregap
-				int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
+				int pregapSectors = global::trackNum > 1 ? 150 : 0; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
 				const tinyxml2::XMLElement *pregapElement = trackElement->FirstChildElement(xml::elem::TRACK_PREGAP);
 				if(pregapElement != nullptr)
 				{
@@ -633,47 +644,57 @@ int Main(int argc, char* argv[])
 							return EXIT_FAILURE;
 						}
 
-						if(pregapSectors > (80 * 60 * 75) && !global::noWarns)
+						if (pregapSectors > (1 * 5 * 75) && !global::noWarns)
 						{
-							printf( "WARNING: Duration > 80 minutes\n");
+							if ( !global::QuietMode )
+							{
+								printf( "    " );
+							}
+							printf( "WARNING: Pregap is unusually large (%s > 5 seconds) on line %d.\n",
+								xml::attrib::PREGAP_DURATION, pregapElement->GetLineNum() );
 						}
 					}
 				}
 
 				if(pregapSectors > 0)
 				{
-					audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
 					FormatTo( cueSheet, "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str() );
 					totalLenLBA += pregapSectors;
 				}
 
-				const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
-				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource);
-				FormatTo( cueSheet, "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str() );
-
 				const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
-				if(trackid != nullptr)
+				if (trackid == nullptr)
 				{
-					if(!UpdateDAFilesWithLBA(entries, trackid, totalLenLBA))
+					trackid = "";
+					if (dirTree == nullptr)
+					{
+						dirTree = (entries.emplace_back().subdir = std::make_unique<iso::DirTreeClass>(entries)).get();
+					}
+					if (!dirTree->AddFileEntry(std::string(U8ToSv(trackSource.filename().u8string())), EntryType::EntryDA, trackSource, EntryAttributes{.HFLAG = 2}, trackid, nullptr))
 					{
 						return EXIT_FAILURE;
 					}
 				}
-				else
+
+				auto *entry = UpdateDAFilesWithLBA(entries, trackid, totalLenLBA);
+				if (entry == nullptr)
 				{
-					auto& entry = unrefTracks.emplace_back();
-					entry.id = trackSource.stem().string();
-					entry.length = audioSize;
-					entry.lba = totalLenLBA;
-					entry.srcfile = trackSource;
-					entry.type = EntryType::EntryDA;
-					if (!global::QuietMode)
+					return EXIT_FAILURE;
+				}
+				audioTracks.push_back(entry);
+				FormatTo( cueSheet, "    INDEX 01 %s\n", SectorsToTimecode(entry->lba).c_str() );
+
+				const int entryLenLBA = GetSizeInSectors(entry->length, CD_SECTOR_SIZE);
+				if (entryLenLBA < (2 * 75) && !global::noWarns)
+				{
+					if ( !global::QuietMode )
 					{
-						printf("    DA File \"%" PRFILESYSTEM_PATH "\"\n", trackSource.filename().c_str());
+						printf( "    " );
 					}
+					printf( "WARNING: Audio duration < 2 seconds. The burner might reject the image!\n" );
 				}
 
-				totalLenLBA += audioSize/CD_SECTOR_SIZE;
+				totalLenLBA = std::max<int>(totalLenLBA, entry->lba + entryLenLBA); // std::max prevents rewind on forced LBAs
 
 				if ( !global::QuietMode )
 				{
@@ -698,6 +719,14 @@ int Main(int argc, char* argv[])
 			global::trackNum++;
 		}
 
+		if ( totalLenLBA > (80 * 60 * 75) && !global::noWarns )
+		{
+			printf( "WARNING: Total duration > 80 minutes (%d sectors)\n", totalLenLBA );
+			if ( !global::QuietMode )
+			{
+				printf( "\n" );
+			}
+		}
 
 		if ( !global::LBAfile.empty() )
 		{
@@ -721,15 +750,6 @@ int Main(int argc, char* argv[])
 				dirTree->OutputLBAlisting( fp, 0 );
 
 				dirTree->SortDirectoryEntries();
-				if (!unrefTracks.empty())
-				{
-					iso::DirTreeClass tempTree(unrefTracks);
-					for (auto& entry : unrefTracks)
-					{
-						tempTree.entriesInDir.push_back(entry);
-					}
-					tempTree.OutputLBAlisting( fp, 0 );
-				}
 
 				fclose( fp );
 
@@ -759,16 +779,6 @@ int Main(int argc, char* argv[])
 				dirTree->OutputHeaderListing( fp, 0, "<ROOT>" );
 
 				dirTree->SortDirectoryEntries();
-				if (!unrefTracks.empty())
-				{
-					iso::DirTreeClass tempTree(unrefTracks);
-					for (auto& entry : unrefTracks)
-					{
-						tempTree.entriesInDir.push_back(entry);
-					}
-					fprintf( fp, "\n" );
-					tempTree.OutputHeaderListing( fp, 1, "UNREFERENCED TRACKS" );
-				}
 
 				fprintf( fp, "\n#endif\n" );
 
@@ -835,32 +845,25 @@ int Main(int argc, char* argv[])
 			}
 
 			// Write out the audio tracks
-			for (const cdtrack& track : audioTracks)
+			for (const auto* track : audioTracks)
 			{
-				const uint32_t sizeInSectors = GetSizeInSectors(track.size, CD_SECTOR_SIZE);
-				auto sectorView = writer.GetRawSectorView(track.lba, sizeInSectors);
+				const uint32_t sizeInSectors = GetSizeInSectors(track->length, CD_SECTOR_SIZE);
+				auto sectorView = writer.GetRawSectorView(track->lba, sizeInSectors);
 
-				if (!track.source.empty())
+				// Pack the audio file
+				if ( !global::QuietMode )
 				{
-					// Pack the audio file
-					if ( !global::QuietMode )
-					{
-						printf( "    Packing audio \"%" PRFILESYSTEM_PATH "\"... ", track.source.c_str() );
-						fflush(stdout);
-					}
-
-					if ( PackFileAsCDDA( sectorView->GetRawBuffer(), track.source ) )
-					{
-						if ( !global::QuietMode )
-						{
-							printf( "Done.\n" );
-						}
-					}
+					printf( "    Packing audio \"%" PRFILESYSTEM_PATH "\"... ", track->srcfile.c_str() );
+					fflush(stdout);
 				}
-				else
+
+				if ( !PackFileAsCDDA( sectorView->GetRawBuffer(), track->srcfile ) )
 				{
-					// Write pregap
-					sectorView->WriteBlankSectors();
+					return EXIT_FAILURE;
+				}
+				if ( !global::QuietMode )
+				{
+					printf( "Done.\n" );
 				}
 			}
 
@@ -869,6 +872,10 @@ int Main(int argc, char* argv[])
 				printf( "\n" );
 			}
 						
+			if ( !hasDataTrack )
+			{
+				goto close;
+			}
 
 			// Write license data
 			if ( !global::LicenseFile.empty() )
@@ -919,7 +926,7 @@ int Main(int argc, char* argv[])
 				printf( "Ok.\n\n" );
 			}
 
-			// Close both ISO writer and CUE sheet
+		close:
 			writer.Close();
 
 			if ( !global::QuietMode )
@@ -1272,10 +1279,6 @@ iso::DirTreeClass* ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, 
 		printf( "      Directories: %d\n", dirTree->GetDirCountTotal() );
 		printf( "      Total file system size: %d bytes (%d sectors)\n\n",
 			CD_SECTOR_SIZE*totalLen, totalLen);
-	}
-	if ( !global::noWarns && totalLen > (71 * 60 * 75) )
-	{
-		printf( "WARNING: System duration > 71 minutes\n\n" );
 	}
 
 	return dirTree;

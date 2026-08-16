@@ -73,7 +73,6 @@ namespace iso
 		void WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* parentDir, const int totalDirs) const;
 
 	public:
-        static int GetAudioSize(const fs::path& audioFile);
 		EntryList& entries; // List of all entries on the disc
 		std::vector<std::reference_wrapper<iso::DIRENTRY>> entriesInDir; // References to entries in this directory
 

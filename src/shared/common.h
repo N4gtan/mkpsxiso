@@ -7,24 +7,12 @@
 
 enum class EntryType
 {
-	EntryFile,
 	EntryDir,
+	EntryFile,
 	EntryXA,
 	EntryXA_DO,
 	EntryDA,
 	EntryDummy
-};
-
-struct cdtrack
-{
-	cdtrack(unsigned int lba, unsigned int size, fs::path source = fs::path())
-		: lba(lba), size(size), source(std::move(source))
-	{
-	}
-
-	unsigned int lba;
-	unsigned int size;
-	fs::path source;
 };
 
 class EntryAttributes
