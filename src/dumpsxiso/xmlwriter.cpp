@@ -425,6 +425,10 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	{
 		tinyxml2::XMLElement *dirtree = trackElement->FirstChildElement(xml::elem::DIRECTORY_TREE);
 		SimplifyDefaultXMLAttributes(dirtree, EstablishXMLAttributeDefaults(defaultAttributesElement, attributeCounters));
+		if (memcmp(descriptor.volumeCreateDate.year+2, dirtree->Attribute(xml::attrib::ENTRY_DATE)+2, 12) == 0)
+		{
+			dirtree->DeleteAttribute(xml::attrib::ENTRY_DATE);
+		}
 	}
 
 	// Write CD-DA tracks
