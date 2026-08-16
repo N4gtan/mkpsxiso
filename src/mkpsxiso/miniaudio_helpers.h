@@ -2,10 +2,6 @@
 
 #include "miniaudio_pcm.h"
 
-ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, ma_decoder* pDecoder, VirtualWav* vw, bool& isLossy, bool& isPCM);
-
-#if defined(MINIAUDIO_IMPLEMENTATION) || defined(MA_IMPLEMENTATION)
-
 // Helper wrapper to simplify dealing with paths on Windows
 inline ma_result ma_decoder_init_path(const fs::path& pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
@@ -100,5 +96,3 @@ inline ma_result ma_redbook_decoder_init_path_by_ext(const fs::path& filePath, m
 	}
 	return MA_SUCCESS;
 }
-
-#endif

@@ -2,6 +2,7 @@
 
 #include "miniaudio.h"
 #include "platform.h"
+#include "common.h"
 
 typedef struct {
     uint8_t header[44];
@@ -11,15 +12,13 @@ typedef struct {
     unique_file file;
 } VirtualWav;
 
-#if defined(MINIAUDIO_IMPLEMENTATION) || defined(MA_IMPLEMENTATION)
-
-static ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t bytesToRead, size_t *pBytesRead)
+inline ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t bytesToRead, size_t *pBytesRead)
 {
     VirtualWav *vw = (VirtualWav *)pDecoder->pUserData;
     size_t bytesRead = 0;
     if(vw->vpos < 44)
     {
-        const size_t headerread = ma_dr_wav_min(bytesToRead, 44-vw->vpos);
+        const size_t headerread = std::min<size_t>(bytesToRead, 44-vw->vpos);
         memcpy(pBufferOut, &vw->header[vw->vpos], headerread);
         vw->vpos += headerread;
         bytesRead += headerread;
@@ -37,7 +36,7 @@ static ma_result virtual_wav_read(ma_decoder *pDecoder, void *pBufferOut, size_t
     return MA_SUCCESS;
 }
 
-static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_seek_origin origin)
+inline ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_seek_origin origin)
 {
     VirtualWav *vw = (VirtualWav *)pDecoder->pUserData;
 
@@ -56,38 +55,12 @@ static ma_result virtual_wav_seek(ma_decoder *pDecoder, ma_int64 byteOffset, ma_
     }
 
     vw->vpos = byteOffset;
-    vw->pos  = ma_dr_wav_max(byteOffset - 44, 0);
+    vw->pos  = std::max<int64_t>(byteOffset - 44, 0);
 
     if (SeekFile(vw->file.get(), vw->pos, SEEK_SET) != 0)
     {
         return MA_ERROR;
     }
-
-    return MA_SUCCESS;
-}
-
-#if !defined(_WIN32) && !((defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 1) || defined(_XOPEN_SOURCE) || defined(_POSIX_SOURCE)) && !defined(MA_BSD)
-int fileno(FILE *stream);
-#endif
-
-static ma_result stdio_file_size(FILE *file, uint64_t *pSizeInBytes)
-{
-    int fd;
-    struct stat info;
-
-    MA_ASSERT(file  != NULL);
-
-#if defined(_WIN32)
-    fd = _fileno(file);
-#else
-    fd =  fileno(file);
-#endif
-
-    if (fstat(fd, &info) != 0) {
-        return ma_result_from_errno(errno);
-    }
-
-    *pSizeInBytes = info.st_size;
 
     return MA_SUCCESS;
 }
@@ -101,9 +74,10 @@ inline MA_API ma_result ma_decoder_init_path_pcm(const fs::path& pFilePath, ma_d
         return MA_INVALID_FILE;
     }
 
-    uint64_t pcmSize;
-    if(stdio_file_size(pUserData->file.get(), &pcmSize) != MA_SUCCESS)
+    const int64_t pcmSize = GetSize(pFilePath);
+    if(pcmSize < 0)
     {
+        printf("    ERROR: (PCM) unable to get file size\n");
         return MA_ERROR;
     }
     else if(pcmSize == 0)
@@ -165,5 +139,3 @@ inline MA_API ma_result ma_decoder_init_path_pcm(const fs::path& pFilePath, ma_d
     pConfig->encodingFormat = ma_encoding_format_wav;
     return ma_decoder_init(&virtual_wav_read, &virtual_wav_seek, pUserData, pConfig, pDecoder);
 }
-
-#endif
