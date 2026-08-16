@@ -155,7 +155,7 @@ namespace iso
 
 		void WriteDescriptor(cd::IsoWriter* writer, const IDENTIFIERS& id, const int imageLen) const;
 
-		void SortDirectoryEntries(const bool byOrder, const bool byLBA = false);
+		void SortDirectoryEntries(const bool byLBA = false);
 
 		int CalculatePathTableLen(const DIRENTRY& dirEntry) const;
 

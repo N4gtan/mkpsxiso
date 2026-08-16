@@ -380,41 +380,43 @@ int iso::DirTreeClass::CalculateDirEntryLen() const
 	return dirEntryLen;
 }
 
-void iso::DirTreeClass::SortDirectoryEntries(const bool byOrder, const bool byLBA)
+void iso::DirTreeClass::SortDirectoryEntries(const bool byLBA)
 {
 	// Search for directories
+	bool hasExplicitOrder = false;
 	for ( const auto& e : entriesInDir )
 	{
 		const DIRENTRY& entry = e.get();
+		if ( entry.order != -1 )
+		{
+			hasExplicitOrder = true;
+		}
 		if ( entry.type == EntryType::EntryDir )
 		{
 			// Perform recursive call
-			if ( entry.subdir != nullptr )
-			{
-				entry.subdir->SortDirectoryEntries(byOrder, byLBA);
-			}
+			entry.subdir->SortDirectoryEntries(byLBA);
 		}
 	}
 
-	if (byOrder)
-	{
-		std::stable_sort(entriesInDir.begin(), entriesInDir.end(), [](const auto& left, const auto& right)
-			{
-				return left.get().order < right.get().order;
-			});
-	}
-	else if (byLBA)
+	if (byLBA)
 	{
 		std::sort(entriesInDir.begin(), entriesInDir.end(), [](const auto& left, const auto& right)
 			{
 				return left.get().lba < right.get().lba;
 			});
 	}
-	else
+	else if (hasExplicitOrder)
 	{
-		std::sort(entriesInDir.begin(), entriesInDir.end(), [&](const auto& left, const auto& right)
+		std::stable_sort(entriesInDir.begin(), entriesInDir.end(), [](const auto& left, const auto& right)
 			{
-				return CleanIdentifier(left.get().id) < CleanIdentifier(right.get().id);
+				return left.get().order < right.get().order;
+			});
+	}
+	else if (!global::cdvd_style.value_or(false))
+	{
+		std::sort(entriesInDir.begin(), entriesInDir.end(), [](const auto& left, const auto& right)
+			{
+				return left.get().id < right.get().id;
 			});
 	}
 }

@@ -285,12 +285,14 @@ static EntryType GetXAEntryType(unsigned short xa_attr)
 
 void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int sectors)
 {
-	short order = 0;
+	bool isAlphabetical = true; // Anomaly detection flag
+	std::string_view lastName = "";
+
 	size_t numEntries = 0; // Used to skip the first two entries, . and ..
     for (int sec = 0; sec < sectors; sec++)
     {
         reader->SeekToSector(lba + sec);
-		while (true)
+		for (;; ++numEntries)
 		{
 			auto entry = ReadEntry(reader);
 			if (!entry)
@@ -299,14 +301,15 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 				break;
 			}
 
-			if (numEntries++ >= 2)
+			if (numEntries < 2 || entry->entry.entryOffs.lsb < 18) // Skip invalid entries
+				continue;
+
+			entry->order = static_cast<short>(numEntries - 2);
+			if (isAlphabetical && entry->identifier < lastName)
 			{
-				if (*global::cdvd_style)
-				{
-					entry->order = order++;
-				}
-				dirEntryList.EmplaceBack(std::move(*entry));
+				isAlphabetical = false;
 			}
+			lastName = dirEntryList.EmplaceBack(std::move(*entry)).identifier;
 		}
     }
 
@@ -317,18 +320,23 @@ void cd::IsoDirEntries::ReadDirEntries(cd::IsoReader* reader, int lba, int secto
 		});
 
 	// Delete orders if all are correct to avoid populate the xml with unnecessary strings
+	auto& entriesInDir = dirEntryList.GetView();
 	if (*global::cdvd_style)
 	{
-		auto& entriesInDir = dirEntryList.GetView();
 		for (int index = 0; index < entriesInDir.size(); index++)
 		{
 			if (*entriesInDir[index].get().order != index)
 				return;
 		}
-		for (auto& entry : entriesInDir)
-		{
-			entry.get().order.reset();
-		}
+	}
+	else if (!isAlphabetical)
+	{
+		return;
+	}
+
+	for (auto& entry : entriesInDir)
+	{
+		entry.get().order.reset();
 	}
 }
 

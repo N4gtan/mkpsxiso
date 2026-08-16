@@ -35,7 +35,7 @@ private:
 	static constexpr unsigned char DEFAULT_XAATRIB = 0xFF;
 	static constexpr unsigned short DEFAULT_XAPERM = 0x555; // rx
 	static constexpr unsigned short	DEFAULT_OWNER_ID = 0;
-	static constexpr signed short	DEFAULT_ORDER = 0;
+	static constexpr signed short	DEFAULT_ORDER = -1;
 	static constexpr unsigned short	DEFAULT_FORCE_LBA = 0;
 
 public:
