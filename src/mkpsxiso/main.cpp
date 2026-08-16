@@ -453,6 +453,13 @@ int Main(int argc, char* argv[])
 			}
 		}
 
+		// Check if cue_sheet attribute is specified
+		if ( global::cuefile && global::cuefile->empty() )
+		{
+			printf( "ERROR: %s attribute is blank.\n", xml::attrib::CUE_SHEET );
+			return EXIT_FAILURE;
+		}
+
 		if ( !global::QuietMode )
 		{
 			printf( "Building ISO Image: \"%" PRFILESYSTEM_PATH "\"", global::ImageName.c_str() );
@@ -497,43 +504,6 @@ int Main(int argc, char* argv[])
 			return EXIT_FAILURE;
 		}
 
-		// Check if cue_sheet attribute is specified
-		unique_file cuefp;
-
-		if ( !global::NoIsoGen )
-		{
-			if ( global::cuefile )
-			{
-				if ( global::cuefile->empty() )
-				{
-					if ( !global::QuietMode )
-					{
-						printf( "  " );
-					}
-
-					printf( "ERROR: %s attribute is blank.\n", xml::attrib::CUE_SHEET );
-
-					return EXIT_FAILURE;
-				}
-
-				cuefp = OpenScopedFile( *global::cuefile, "w" );
-
-				if ( cuefp == nullptr )
-				{
-					if ( !global::QuietMode )
-					{
-						printf( "  " );
-					}
-
-					printf( "ERROR: Unable to create cue sheet.\n" );
-
-					return EXIT_FAILURE;
-				}
-
-				fprintf(cuefp.get(), "FILE \"%" PRFILESYSTEM_PATH "\" BINARY\n", global::ImageName.filename().c_str());
-			}
-		}
-
 		global::trackNum = 1;
 		iso::EntryList entries;
 		iso::IDENTIFIERS isoIdentifiers {};
@@ -542,6 +512,7 @@ int Main(int argc, char* argv[])
 
 		std::vector<cdtrack> audioTracks;
 		iso::EntryList unrefTracks;
+		std::string cueSheet = Format<4096>( "FILE \"%s\" BINARY\n", global::ImageName.filename().u8string().c_str() );
 
 		// Parse tracks
 		if ( !global::QuietMode )
@@ -606,11 +577,8 @@ int Main(int argc, char* argv[])
 					return EXIT_FAILURE;
 				}
 
-				if ( cuefp )
-				{
-					fprintf( cuefp.get(), "  TRACK %02d MODE2/2352\n", global::trackNum );
-					fprintf( cuefp.get(), "    INDEX 01 00:00:00\n" );
-				}
+				FormatTo( cueSheet,	"  TRACK %02d MODE2/2352\n"
+									"    INDEX 01 00:00:00\n", global::trackNum);
 
 			// Add audio track
 			}
@@ -618,7 +586,7 @@ int Main(int argc, char* argv[])
 			{
 
 				// Only allow audio tracks if the cue_sheet attribute is specified
-				if ( cuefp == nullptr && !global::NoIsoGen )
+				if ( !global::cuefile && !global::NoIsoGen )
 				{
 					if ( !global::QuietMode )
 					{
@@ -647,10 +615,7 @@ int Main(int argc, char* argv[])
 				}
 
 				fs::path trackSource = (global::XMLscript.parent_path() / reinterpret_cast<const char8_t*>(trackRelativeSource)).lexically_normal();
-				if ( cuefp )
-				{
-					fprintf( cuefp.get(), "  TRACK %02d AUDIO\n", global::trackNum );
-				}
+				FormatTo( cueSheet, "  TRACK %02d AUDIO\n", global::trackNum );
 
 				// pregap
 				int pregapSectors = 150; // SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
@@ -674,24 +639,17 @@ int Main(int argc, char* argv[])
 						}
 					}
 				}
+
 				if(pregapSectors > 0)
 				{
-					if ( cuefp )
-					{
-						fprintf( cuefp.get(), "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str());
-					}
-
 					audioTracks.emplace_back(totalLenLBA, pregapSectors * CD_SECTOR_SIZE);
+					FormatTo( cueSheet, "    INDEX 00 %s\n", SectorsToTimecode(totalLenLBA).c_str() );
 					totalLenLBA += pregapSectors;
-				}
-
-				if ( cuefp )
-				{
-					fprintf( cuefp.get(), "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str());
 				}
 
 				const unsigned int audioSize = iso::DirTreeClass::GetAudioSize(trackSource);
 				audioTracks.emplace_back(totalLenLBA, audioSize, trackSource);
+				FormatTo( cueSheet, "    INDEX 01 %s\n", SectorsToTimecode(totalLenLBA).c_str() );
 
 				const char *trackid = trackElement->Attribute(xml::attrib::TRACK_ID);
 				if(trackid != nullptr)
@@ -849,6 +807,17 @@ int Main(int argc, char* argv[])
 
 			}
 
+			if ( global::cuefile )
+			{
+				unique_file cuefp = OpenScopedFile( *global::cuefile, "wb" );
+				if ( cuefp == nullptr )
+				{
+					printf( "ERROR: Cannot open or create output cue sheet.\n" );
+					return EXIT_FAILURE;
+				}
+
+				fwrite( cueSheet.c_str(), sizeof(char), cueSheet.length(), cuefp.get() );
+			}
 
 			// Write the file system
 			if ( !global::QuietMode )
@@ -952,7 +921,6 @@ int Main(int argc, char* argv[])
 
 			// Close both ISO writer and CUE sheet
 			writer.Close();
-			cuefp.reset();
 
 			if ( !global::QuietMode )
 			{
