@@ -392,12 +392,13 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	return entry;
 }
 
-void cd::IsoDirEntries::ReadRootDir(cd::IsoReader* reader, int lba)
+cd::IsoDirEntries::Entry* cd::IsoDirEntries::ReadRootDir(cd::IsoReader* reader, int lba)
 {
 	reader->SeekToSector(lba);
 	auto entry = ReadEntry(reader);
 	if (entry)
 	{
-		dirEntryList.EmplaceBack(std::move(*entry));
+		return &dirEntryList.EmplaceBack(std::move(*entry));
 	}
+	return nullptr;
 }

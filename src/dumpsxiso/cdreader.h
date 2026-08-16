@@ -104,7 +104,7 @@ namespace cd {
 
         explicit IsoDirEntries(ListView<Entry> view);
         void ReadDirEntries(cd::IsoReader* reader, int lba, int sectors);
-        void ReadRootDir(cd::IsoReader* reader, int lba);
+        Entry* ReadRootDir(cd::IsoReader* reader, int lba);
 
     private:
         static std::optional<Entry> ReadEntry(cd::IsoReader* reader);

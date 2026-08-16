@@ -69,7 +69,7 @@ static void WriteOptionalXMLAttribs(tinyxml2::XMLElement* element, const cd::Iso
 	++attributeCounters.GID[entry.extData.ownergroupid];
 	++attributeCounters.UID[entry.extData.owneruserid];
 
-	const auto HFLAG = entry.entry.flags & 0x20 ? entry.entry.flags & 0x03 : entry.entry.flags & 0x01; // 5th bit simulates obfuscation
+	const auto HFLAG = entry.entry.flags & 0x20 ? entry.entry.flags & 0x03 : entry.entry.flags & 0x01; // bit 5 simulates obfuscation
 	element->SetAttribute(xml::attrib::HIDDEN_FLAG, HFLAG);
 	++attributeCounters.HFLAG[HFLAG];
 

@@ -33,7 +33,7 @@ namespace global
 
 
 bool ParseDirectory(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* parentElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath);
-int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
+iso::DirTreeClass* ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen);
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
 
@@ -538,6 +538,7 @@ int Main(int argc, char* argv[])
 		global::trackNum = 1;
 		iso::EntryList entries;
 		iso::IDENTIFIERS isoIdentifiers {};
+		iso::DirTreeClass* dirTree = nullptr;
 		int totalLenLBA = 0;
 
 		std::vector<cdtrack> audioTracks;
@@ -600,7 +601,8 @@ int Main(int argc, char* argv[])
 					return EXIT_FAILURE;
 				}
 
-				if ( !ParseISOfileSystem( trackElement, global::XMLscript.parent_path(), entries, isoIdentifiers, totalLenLBA ) )
+				dirTree = ParseISOfileSystem( trackElement, global::XMLscript.parent_path(), entries, isoIdentifiers, totalLenLBA );
+				if ( dirTree == nullptr )
 				{
 					return EXIT_FAILURE;
 				}
@@ -739,7 +741,6 @@ int Main(int argc, char* argv[])
 			global::trackNum++;
 		}
 
-	    iso::DirTreeClass* dirTree = entries.front().subdir.get();
 
 		if ( !global::LBAfile.empty() )
 		{
@@ -1004,7 +1005,7 @@ EntryAttributes ReadEntryAttributes(EntryAttributes current, const tinyxml2::XML
 	return current;
 };
 
-int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen)
+iso::DirTreeClass* ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path& xmlPath, iso::EntryList& entries, iso::IDENTIFIERS& isoIdentifiers, int& totalLen)
 {
 	const tinyxml2::XMLElement* identifierElement =
 		trackElement->FirstChildElement(xml::elem::IDENTIFIERS);
@@ -1060,7 +1061,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 					{
 						printf("%s on line %d\n", global::xmlIdFile.ErrorName(), global::xmlIdFile.ErrorLineNum());
 					}
-					return false;
+					return nullptr;
 				}
 			}
 			
@@ -1188,7 +1189,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		{
 			printf( "ERROR: File attribute of <license> element is missing "
 				"or blank on line %d.\n", licenseElement->GetLineNum() );
-			return false;
+			return nullptr;
 		}
 
 		global::LicenseFile = (xmlPath / reinterpret_cast<const char8_t*>(license_file_attrib)).lexically_normal();
@@ -1216,7 +1217,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 			printf( "not found.\n" );
 
-			return false;
+			return nullptr;
 		}
 
 		if ( licenseSize != sizeof(cd::ISO_LICENSE) && !global::noWarns )
@@ -1269,7 +1270,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		}
 		printf( "ERROR: No %s element specified for data track "
 			"on line %d.\n", xml::elem::DIRECTORY_TREE, trackElement->GetLineNum() );
-		return false;
+		return nullptr;
 	}
 
 	const char* dirTreePath = directoryTree->Attribute(xml::attrib::ENTRY_SOURCE);
@@ -1286,7 +1287,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 
 	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes, currentPath) )
 	{
-		return false;
+		return nullptr;
 	}
 
 	int pathTableLen = dirTree->CalculatePathTableLen(root);
@@ -1310,7 +1311,7 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		printf( "WARNING: System duration > 71 minutes\n\n" );
 	}
 
-	return true;
+	return dirTree;
 }
 
 static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElement* dirElement, const fs::path& xmlPath, const EntryAttributes& defaultAttributes, const fs::path& currentPath)

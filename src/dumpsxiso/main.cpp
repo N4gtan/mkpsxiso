@@ -358,8 +358,7 @@ std::unique_ptr<cd::IsoDirEntries> ParsePathTable(cd::IsoReader& reader, ListVie
 					return entry.get().identifier == e.name;
 				}))
 		{
-            dirEntries->ReadRootDir(&reader, e.entry.dirOffs);
-			dirEntries->dirEntryList.GetView().back().get().entry.flags |= 0x22; // We are setting the reserved 5th bit to simulate obfuscation
+			dirEntries->ReadRootDir(&reader, e.entry.dirOffs)->entry.flags |= 0x22; // We are setting the reserved bit 5 to simulate obfuscation
         }
     } 
 
@@ -393,17 +392,17 @@ std::unique_ptr<cd::IsoDirEntries> ParsePathTable(cd::IsoReader& reader, ListVie
 std::unique_ptr<cd::IsoDirEntries> ParseRoot(cd::IsoReader& reader, ListView<cd::IsoDirEntries::Entry> view, const std::vector<cd::IsoPathTable::Entry>& pathTableList)
 {
     auto dirEntries = std::make_unique<cd::IsoDirEntries>(std::move(view));
-	dirEntries->ReadRootDir(&reader, pathTableList[0].entry.dirOffs);
+	auto* entry = dirEntries->ReadRootDir(&reader, pathTableList[0].entry.dirOffs);
 
-	if (dirEntries->dirEntryList.GetView().empty())
+	if (entry == nullptr)
 	{
 		printf("\nERROR: Root directory is empty or invalid.\n");
 		exit(EXIT_FAILURE);
 	}
-	auto& entry = dirEntries->dirEntryList.GetView().front().get();
-	entry.subdir = !param::pathTable
-		? ParseSubdirectory(reader, dirEntries->dirEntryList.NewView(), entry.entry.entryOffs.lsb, GetSizeInSectors(entry.entry.entrySize.lsb), entry.identifier)
-		: ParsePathTable(reader, dirEntries->dirEntryList.NewView(), pathTableList, 0, entry.identifier);
+
+	entry->subdir = !param::pathTable
+		? ParseSubdirectory(reader, dirEntries->dirEntryList.NewView(), entry->entry.entryOffs.lsb, GetSizeInSectors(entry->entry.entrySize.lsb), entry->identifier)
+		: ParsePathTable(reader, dirEntries->dirEntryList.NewView(), pathTableList, 0, entry->identifier);
 
 	return dirEntries;
 }
@@ -525,7 +524,7 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 				gapEntry->entry.entryOffs.lsb 	  = currentLBA;
 				gapEntry->entry.entrySize.lsb 	  = F1_DATA_SIZE;
 				gapEntry->entry.entryDate.GMToffs = rootGMTOff;
-				gapEntry->entry.flags 			  = 0x22; // We are setting the reserved 5th bit to simulate obfuscation
+				gapEntry->entry.flags 			  = 0x22; // We are setting the reserved bit 5 to simulate obfuscation
 				gapEntry->extData.ownergroupid 	  = rootGID;
 				gapEntry->extData.owneruserid 	  = rootUID;
 				gapEntry->extData.attributes 	  = rootPrm;
