@@ -167,10 +167,6 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
-			if (!param::dir)
-			{
-				newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
-			}
 		}
 		else
 		{
@@ -179,10 +175,6 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			if (!param::lba)
 			{
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(sourcePath.generic_u8string().c_str()));
-			}
-			if (!param::dir)
-			{
-				newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
 			}
 		}
 
@@ -210,13 +202,10 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			newelement->SetAttribute(xml::attrib::TRACK_ID, entry.trackid.c_str());
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, "da");
 		}
-		if (!param::dir)
-		{
-			newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
-		}
 	}
 	if (!param::dir)
 	{
+		newelement->SetAttribute(xml::attrib::ENTRY_DATE, DateToString(entry.entry.entryDate, false).c_str());
 		WriteOptionalXMLAttribs(newelement, entry, attributeCounters);
 	}
 	return dirElement;

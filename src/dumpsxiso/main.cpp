@@ -853,6 +853,8 @@ void ParseDIR()
 	memcpy(&descriptor.volumeID, 			  "MKPSXISO",	 sizeof("MKPSXISO"));
 	memcpy(&descriptor.systemID, 			  "PLAYSTATION", sizeof("PLAYSTATION"));
 	memcpy(&descriptor.applicationIdentifier, "PLAYSTATION", sizeof("PLAYSTATION"));
+	memset(&descriptor.abstractFileIdentifier, 			' ', sizeof(descriptor.abstractFileIdentifier));
+	memset(&descriptor.bibliographicFilelIdentifier,	' ', sizeof(descriptor.bibliographicFilelIdentifier));
 
 	if (!param::QuietMode)
 		printf("\nParsing directory \"%" PRFILESYSTEM_PATH "\"... Done.\n", param::outPath.c_str());
@@ -924,6 +926,8 @@ void ParseISO(cd::IsoReader& reader) {
 		PrintId("      Data Preparer ID  : ", descriptor.dataPreparerIdentifier);
 		PrintId("      Application ID    : ", descriptor.applicationIdentifier);
 		PrintId("      Copyright ID      : ", descriptor.copyrightFileIdentifier);
+		PrintId("      Abstract File ID  : ", descriptor.abstractFileIdentifier);
+		PrintId("      Bibliographic ID  : ", descriptor.bibliographicFilelIdentifier);
 
 		PrintDate("      Creation Date     : ", descriptor.volumeCreateDate);
 		PrintDate("      Modification Date : ", descriptor.volumeModifyDate);

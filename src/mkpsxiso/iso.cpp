@@ -102,6 +102,7 @@ iso::DIRENTRY& iso::DirTreeClass::CreateRootDirectory(EntryList& entries, const 
 	entry.type		= EntryType::EntryDir;
 	entry.subdir	= std::make_unique<DirTreeClass>(entries, &entry);
 	entry.date		= volumeDate;
+	entry.date.GMToffs = attributes.GMTOffs;
 	if (!global::cdvd_style.value_or(false))
 	{
 		entry.date.year = volumeDate.year % 0x64; // Root overflows dates past 99 for games built with Sony CD-ROM Generator 1.40 and older
@@ -914,7 +915,7 @@ void iso::DirTreeClass::WriteDescriptor(cd::IsoWriter* writer, const iso::IDENTI
 	// Copyright (file) identifier
 	CopyStringPadWithSpaces( isoDescriptor.copyrightFileIdentifier, id.Copyright );
 
-	// Unneeded identifiers
+	// Uncommon identifiers
 	CopyStringPadWithSpaces( isoDescriptor.abstractFileIdentifier, id.AbstractFile );
 	CopyStringPadWithSpaces( isoDescriptor.bibliographicFilelIdentifier, id.BibliographicFile );
 

@@ -1153,6 +1153,16 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 				printf( "      Copyright ID      : %s\n",
 					isoIdentifiers.Copyright );
 			}
+			if ( isoIdentifiers.AbstractFile != nullptr )
+			{
+				printf( "      Abstract File ID  : %s\n",
+					isoIdentifiers.AbstractFile );
+			}
+			if ( isoIdentifiers.BibliographicFile != nullptr )
+			{
+				printf( "      Bibliographic ID  : %s\n",
+					isoIdentifiers.BibliographicFile );
+			}
 			if ( isoIdentifiers.CreationDate != nullptr )
 			{
 				printf( "      Creation Date     : %s\n",
