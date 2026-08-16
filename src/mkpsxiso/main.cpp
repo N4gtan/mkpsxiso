@@ -334,7 +334,7 @@ int Main(int argc, char* argv[])
 							{
 								return updateAudioIndexFromTID(tid);
 							}
-							return std::to_string(100 + audioIndex++).substr(1);
+							return Format("%02u", audioIndex++);
 						}();
 
 						auto matchByID = audioTracks.end();

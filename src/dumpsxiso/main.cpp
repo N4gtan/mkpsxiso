@@ -417,8 +417,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	{
 		if(entry.type == EntryType::EntryDA)
 		{
-			entry.trackid = std::to_string(100 + tracknum).substr(1);
-			tracknum++;
+			FormatTo(entry.trackid, "%02u", tracknum++);
 			DAfiles.push_back(&entry);
 		}
 	}
@@ -485,9 +484,8 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			{
 				if(!entry->trackid.empty())
 				{
-					entry->trackid = std::to_string(100 + tracknum).substr(1);
+					FormatTo(entry->trackid, "%02u", tracknum++);
 				}
-				tracknum++;
 			}
 		}
 
@@ -530,12 +528,12 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 				gapEntry->extData.attributes 	  = rootPrm;
 				if ((sector.subHead[2] & 0x7E) == 0x08)
 				{
-					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".DAT";
+					FormatTo(gapEntry->identifier, "UNKN%04d.DAT", fileCount++);
 					gapEntry->type = EntryType::EntryFile;
 				}
 				else
 				{
-					gapEntry->identifier = "UNKN" + std::to_string(10000 + fileCount++).substr(1) + ".STR";
+					FormatTo(gapEntry->identifier, "UNKN%04d.STR", fileCount++);
 					gapEntry->type = EntryType::EntryXA;
 				}
 			}

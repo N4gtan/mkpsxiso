@@ -86,6 +86,29 @@ unique_file OpenScopedFile(const fs::path& path, const char* mode);
 bool CompareICase(std::string_view strLeft, std::string_view strRight);
 std::string_view U8ToSv(std::u8string_view str);
 
+template <size_t BuffSize = 256, typename... Args>
+void FormatTo(std::string& dst, const char* fmt, Args&&... args)
+{
+	char buf[BuffSize];
+	const int len = snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
+	if (len > 0) [[likely]]
+	{
+		dst.append(buf, std::min<size_t>(len, sizeof(buf) - 1));
+	}
+}
+
+template <size_t Reserve = 0, typename... Args>
+std::string Format(const char* fmt, Args&&... args)
+{
+	std::string result;
+	if constexpr (Reserve > 0)
+	{
+		result.reserve(Reserve);
+	}
+	FormatTo(result, fmt, std::forward<Args>(args)...);
+	return result;
+}
+
 // Argument parsing
 bool ParseArgument(char** argv, std::string_view command, std::string_view longCommand = std::string_view{});
 std::optional<fs::path> ParsePathArgument(char**& argv, std::string_view command, std::string_view longCommand = std::string_view{});

@@ -75,15 +75,15 @@ ISO_LONG_DATESTAMP GetUnspecifiedLongDate()
 std::string DateToString(const cd::ISO_DATESTAMP& src, bool ext)
 {
 	char buf[20];
-	snprintf(buf, sizeof(buf), "%04u%02hhu%02hhu%02hhu%02hhu%02hhu",
-		src.year + 1900u, src.month, src.day, src.hour, src.minute, src.second);
+	int len = snprintf(buf, sizeof(buf), "%04u%02hhu%02hhu%02hhu%02hhu%02hhu",
+					src.year + 1900u, src.month, src.day, src.hour, src.minute, src.second);
 
 	if (ext)
 	{
-		snprintf(buf + 14, 6, "00%+hhd", src.GMToffs);
+		len += snprintf(buf + 14, 6, "00%+hhd", src.GMToffs);
 	}
 
-	return std::string(buf);
+	return std::string(buf, len);
 }
 
 std::string LongDateToString(const cd::ISO_LONG_DATESTAMP& src)
@@ -95,7 +95,7 @@ std::string LongDateToString(const cd::ISO_LONG_DATESTAMP& src)
 
 	char GMTbuf[4];
 	snprintf(GMTbuf, sizeof(GMTbuf), "%+hhd", src.GMToffs);
-	result.append(GMTbuf);
+	result.append(GMTbuf, sizeof(GMTbuf)-1);
 
 	return result;
 }
@@ -119,8 +119,8 @@ int32_t TimecodeToSectors(const std::string_view timecode)
 std::string SectorsToTimecode(const unsigned sectors)
 {
 	char timecode[16];
-	snprintf( timecode, sizeof(timecode), "%02u:%02u:%02u", (sectors/75)/60, (sectors/75)%60, sectors%75);
-	return std::string(timecode);
+	const int len = snprintf( timecode, sizeof(timecode), "%02u:%02u:%02u", (sectors/75)/60, (sectors/75)%60, sectors%75);
+	return std::string(timecode, len);
 }
 
 unsigned short SwapBytes16(unsigned short val)
