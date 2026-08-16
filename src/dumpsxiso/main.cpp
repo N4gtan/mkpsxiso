@@ -1,6 +1,7 @@
 #include "platform.h"
 #include "xmlwriter.h"
 #include "cue.h"
+#include <array>
 
 #ifndef MKPSXISO_NO_LIBFLAC
 #include "FLAC/stream_encoder.h"
@@ -198,34 +199,11 @@ void SaveLicense(const cd::ISO_LICENSE& license) {
     fclose(outFile);
 }
 
-void writePCMFile(FILE *outFile, cd::IsoReader& reader, const size_t cddaSize, const bool isInvalid)
-{
-	constexpr size_t bufferSize = 64 * 1024; // Use a 64KiB buffer for better I/O performance
-	unsigned char copyBuff[bufferSize]{};
-	size_t bytesLeft = cddaSize;
-	while (bytesLeft > 0) {
-
-    	size_t bytesToRead = bytesLeft;
-
-    	if (bytesToRead > bufferSize)
-    		bytesToRead = bufferSize;
-
-		if (!isInvalid)
-    		reader.ReadBytesDA(copyBuff, bytesToRead);
-
-    	fwrite(copyBuff, 1, bytesToRead, outFile);
-
-    	bytesLeft -= bytesToRead;
-    }
-}
-
 void writeWaveFile(FILE *outFile, cd::IsoReader& reader, const size_t cddaSize, const bool isInvalid)
 {
     cd::RIFF_HEADER riffHeader;
     prepareRIFFHeader(&riffHeader, cddaSize);
     fwrite((void*)&riffHeader, 1, sizeof(cd::RIFF_HEADER), outFile);
-
-    writePCMFile(outFile, reader, cddaSize, isInvalid);
 }
 
 #ifndef MKPSXISO_NO_LIBFLAC
@@ -572,12 +550,26 @@ void BruteForce(cd::IsoReader& reader, std::list<cd::IsoDirEntries::Entry>& entr
 
 void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entry>& files, const fs::path& rootPath)
 {
+	auto copyBuff = std::make_unique_for_overwrite<std::array<uint8_t, 1024*1024>>(); // 1MiB buffer for better I/O performance
+	auto copyLoop = [&copyBuff, &reader]<auto ReadFunc>(FILE* outFile, size_t bytesToRead)
+	{
+		while (bytesToRead > 0)
+		{
+			const size_t bytesToWrite = std::min(bytesToRead, copyBuff->size());
+			(reader.*ReadFunc)(copyBuff->data(), bytesToWrite, false);
+			fwrite(copyBuff->data(), 1, bytesToWrite, outFile);
+			bytesToRead -= bytesToWrite;
+		}
+	};
+
 	bool printedDA = false;
     for (const auto& entry : files)
 	{
         if (entry.subdir == nullptr) // Do not extract directories, they're already prepared
 		{
-			const fs::path outputPath = rootPath / entry.virtualPath;
+			const fs::path outPath	= rootPath / entry.virtualPath;
+			unique_file outFile 	= OpenScopedFile(outPath, "wb");
+
 			if (entry.type == EntryType::EntryXA)
 			{
 				// Extract XA or STR file.
@@ -586,45 +578,25 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				// The source file will anyway be stored on our hard drive in raw form.
 				if (!param::QuietMode)
 				{
-					printf("    Extracting XA \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
+					printf("    Extracting XA \"%" PRFILESYSTEM_PATH "\"... ", outPath.c_str());
 				}
 				fflush(stdout);
 
-				FILE* outFile = OpenFile(outputPath, "wb");
-
 				if (outFile == NULL || !reader.SeekToSector(entry.entry.entryOffs.lsb))
 				{
-					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
+				setvbuf(outFile.get(), nullptr, _IONBF, 0); // unbuffered
 
 				// this is the data to be read 2336 bytes per sector, both if the file is an STR or XA,
 				// because the STR contains audio.
 				size_t sectorsToRead = GetSizeInSectors(entry.entry.entrySize.lsb);
 
-				// Copy loop
-				{
-				constexpr size_t bufferSize = 64 * 1024; // Use a 64KiB buffer for better I/O performance
-				unsigned char copyBuff[bufferSize];
-				auto ptrReadFunc = !param::raw ? &cd::IsoReader::ReadBytesXA : &cd::IsoReader::ReadBytesDA;
-				size_t bytesLeft = (!param::raw ? XA_DATA_SIZE : CD_SECTOR_SIZE) * sectorsToRead;
-				while(bytesLeft > 0) {
-
-					size_t bytesToRead = bytesLeft;
-
-					if (bytesToRead > bufferSize)
-						bytesToRead = bufferSize;
-
-					(reader.*ptrReadFunc)(copyBuff, bytesToRead, false);
-
-					fwrite(copyBuff, 1, bytesToRead, outFile);
-
-					bytesLeft -= bytesToRead;
-
-				}
-				}
-
-				fclose(outFile);
+				if (!param::raw)
+					copyLoop.operator()<&cd::IsoReader::ReadBytesXA>(outFile.get(), sectorsToRead * XA_DATA_SIZE);
+				else
+					copyLoop.operator()<&cd::IsoReader::ReadBytesDA>(outFile.get(), sectorsToRead * CD_SECTOR_SIZE);
 			}
 			else if (entry.type == EntryType::EntryDA)
 			{
@@ -637,7 +609,6 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				bool isInvalid = !global::cueFile.multiBIN
 					? !reader.SeekToSector(entry.entry.entryOffs.lsb)
 					: !multiBinSeeker(entry.entry.entryOffs.lsb, entry, reader, global::cueFile);
-				auto outFile = OpenScopedFile(outputPath, "wb");
 
 				if (isInvalid && !param::noWarns)
 				{
@@ -649,45 +620,45 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 					}
 					printf( "\t DUMPSXISO will write the file as a dummy (silent) cdda file.\n"
 							"\t This is generally fine, when the real CDDA file is also a dummy file.\n"
-							"\t If it is not dummy, you WILL lose this audio data in the rebuilt iso... " );
-					if (param::QuietMode)
-					{
-						printf("\n");
-					}
+							"\t If it is not dummy, you WILL lose this audio data in the rebuilt iso.\n" );
 				}
 				else if (!param::QuietMode)
 				{
-					printf("    Extracting audio \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
+					printf("    Extracting audio \"%" PRFILESYSTEM_PATH "\"... ", outPath.c_str());
 				}
 				fflush(stdout);
 
 				if (!outFile) {
-					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
 
 				size_t sectorsToRead = GetSizeInSectors(entry.entry.entrySize.lsb);
 				size_t cddaSize = CD_SECTOR_SIZE * sectorsToRead;
 
-				if(param::encodingFormat == EAF_WAV)
-				{
-					writeWaveFile(outFile.get(), reader, cddaSize, isInvalid);
-				}
 #ifndef MKPSXISO_NO_LIBFLAC
-				else if(param::encodingFormat == EAF_FLAC)
+				if (param::encodingFormat == EAF_FLAC)
 				{
 					// libflac closes outFile
 					writeFLACFile(outFile.release(), reader, cddaSize, isInvalid);
 				}
-#endif
 				else
+#endif
 				{
-					writePCMFile(outFile.get(), reader, cddaSize, isInvalid);
-				}
+					setvbuf(outFile.get(), nullptr, _IONBF, 0); // unbuffered only for us, libFLAC already sets a 10MiB buffer on Windows
+					if (param::encodingFormat == EAF_WAV)
+					{
+						writeWaveFile(outFile.get(), reader, cddaSize, isInvalid);
+					}
 
-				if (global::cueFile.multiBIN)
-				{
-					reader.Open(global::cueFile.tracks[0].filePath);
+					if (isInvalid)
+					{
+						SeekFile(outFile.get(), cddaSize - 1, SEEK_CUR);
+						fputc(0, outFile.get());
+						continue;
+					}
+
+					copyLoop.operator()<&cd::IsoReader::ReadBytesDA>(outFile.get(), cddaSize);
 				}
 			}
 			else if (entry.type == EntryType::EntryFile)
@@ -695,40 +666,21 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				// Extract regular file
 				if (!param::QuietMode)
 				{
-					printf("    Extracting \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
+					printf("    Extracting \"%" PRFILESYSTEM_PATH "\"... ", outPath.c_str());
 					fflush(stdout);
 				}
 
 				reader.SeekToSector(entry.entry.entryOffs.lsb);
-
-				FILE* outFile = OpenFile(outputPath, "wb");
-
 				if (outFile == NULL) {
-					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
+				setvbuf(outFile.get(), nullptr, _IONBF, 0); // unbuffered
 
-				{
-				constexpr size_t bufferSize = 64 * 1024; // Use a 64KiB buffer for better I/O performance
-				unsigned char copyBuff[bufferSize];
-				auto ptrReadFunc = !param::raw ? &cd::IsoReader::ReadBytes : &cd::IsoReader::ReadBytesDA;
-				size_t bytesLeft = !param::raw ? entry.entry.entrySize.lsb : CD_SECTOR_SIZE * GetSizeInSectors(entry.entry.entrySize.lsb);
-				while(bytesLeft > 0) {
-
-					size_t bytesToRead = bytesLeft;
-
-					if (bytesToRead > bufferSize)
-						bytesToRead = bufferSize;
-
-					(reader.*ptrReadFunc)(copyBuff, bytesToRead, false);
-					fwrite(copyBuff, 1, bytesToRead, outFile);
-
-					bytesLeft -= bytesToRead;
-
-				}
-				}
-
-				fclose(outFile);
+				if (!param::raw)
+					copyLoop.operator()< &cd::IsoReader::ReadBytes >(outFile.get(), entry.entry.entrySize.lsb);
+				else
+					copyLoop.operator()<&cd::IsoReader::ReadBytesDA>(outFile.get(), GetSizeInSectors(entry.entry.entrySize.lsb) * CD_SECTOR_SIZE);
 			}
 			else
 			{
@@ -738,6 +690,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				}
 				continue;
 			}
+
 			if (!param::QuietMode)
 			{
 				printf("Done.\n");
