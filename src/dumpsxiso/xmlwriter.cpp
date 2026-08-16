@@ -19,8 +19,6 @@ namespace global
 	extern std::string licenseFile;
 }
 
-extern fs::path GetEncodedDAPath(const fs::path& inputPath);
-
 namespace
 {
 	// XML attribute stuff
@@ -164,7 +162,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 			newelement->SetAttribute(xml::attrib::ENTRY_NAME, entry.identifier.c_str());
 			if (param::lba)
 			{
-				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
+				const fs::path outputPath = sourcePath / entry.virtualPath;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
 			if (currentVirtualPath != nullptr)
@@ -192,7 +190,7 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 		{
 			if (param::lba)
 			{
-				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
+				const fs::path outputPath = sourcePath / entry.virtualPath;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
 			newelement->SetAttribute(xml::attrib::ENTRY_TYPE, entry.type == EntryType::EntryFile ? "data" : "mixed");
@@ -285,7 +283,7 @@ static void WriteXMLByLBA(const std::list<cd::IsoDirEntries::Entry>& files, tiny
 		}
 
 		// Work out the relative position between the current directory and the element to create
-		const fs::path relative = entry.virtualPath.lexically_relative(currentVirtualPath);
+		const fs::path relative = entry.virtualPath.parent_path().lexically_relative(currentVirtualPath);
 		for (const fs::path& part : relative)
 		{
 			if (part == "..")
@@ -442,7 +440,6 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd:
 	{
 		// SYSTEM DESCRIPTION CD-ROM XA Ch.II 2.3, pause should be always >= 150 sectors.
 		unsigned pregap_sectors = 150;
-		dafile->virtualPath = GetEncodedDAPath(srcPath / dafile->virtualPath / dafile->identifier);
 		if(dafile->entry.entryOffs.lsb != currentLBA)
 		{
 			pregap_sectors = dafile->entry.entryOffs.lsb - currentLBA;
@@ -455,7 +452,7 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd:
 		{
 			newtrack->SetAttribute(xml::attrib::TRACK_ID, dafile->trackid.c_str());
 		}
-		newtrack->SetAttribute(xml::attrib::TRACK_SOURCE, reinterpret_cast<const char*>(dafile->virtualPath.generic_u8string().c_str()));
+		newtrack->SetAttribute(xml::attrib::TRACK_SOURCE, reinterpret_cast<const char*>((srcPath / dafile->virtualPath).generic_u8string().c_str()));
 		// only write the pregap element if it's non default
 		if(pregap_sectors != 150)
 		{

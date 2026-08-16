@@ -62,7 +62,7 @@ namespace global
 	std::optional<bool> cdvd_style = false;
 }
 
-fs::path GetEncodedDAPath(const fs::path& inputPath)
+static fs::path GetEncodedDAPath(const fs::path& inputPath)
 {
 	fs::path outputPath(inputPath); 
 	if(param::encodingFormat == EAF_WAV)
@@ -315,11 +315,11 @@ std::unique_ptr<cd::IsoDirEntries> ParseSubdirectory(cd::IsoReader& reader, List
 	{
 		auto& entry = e.get();
 
-		entry.virtualPath = path;
+		entry.virtualPath = path / entry.identifier;
         if (entry.entry.flags & 0x2)
 		{
-            entry.subdir = ParseSubdirectory(reader, dirEntries->dirEntryList.NewView(), entry.entry.entryOffs.lsb, GetSizeInSectors(entry.entry.entrySize.lsb),
-				path / entry.identifier);
+			entry.subdir = ParseSubdirectory(reader, dirEntries->dirEntryList.NewView(), entry.entry.entryOffs.lsb, GetSizeInSectors(entry.entry.entrySize.lsb),
+				entry.virtualPath);
         }
     }
 
@@ -364,26 +364,26 @@ std::unique_ptr<cd::IsoDirEntries> ParsePathTable(cd::IsoReader& reader, ListVie
 
     for (auto& e : dirEntries->dirEntryList.GetView()) {
     		auto& entry = e.get();
-										
-    		entry.virtualPath = path;
 
         if (entry.entry.flags & 0x2) {
 						int index = -1;
-						std::string s;
 						for (int i = 1; i < pathTableList.size(); i++) {
 								auto& ee = pathTableList[i];
 								if (ee.entry.dirOffs == entry.entry.entryOffs.lsb) {
 										index = i;
-										s = ee.name;
+										entry.identifier = ee.name;
 										break;
 								}
 						}
 
+						entry.virtualPath = path / entry.identifier;
 						if (index < 0) continue;
-						entry.identifier = s;
 				
-						entry.subdir = ParsePathTable(reader, dirEntries->dirEntryList.NewView(), pathTableList, index, path / s);
-				}
+						entry.subdir = ParsePathTable(reader, dirEntries->dirEntryList.NewView(), pathTableList, index, entry.virtualPath);
+		}
+        else {
+			entry.virtualPath = path / entry.identifier;
+		}
     }
   
     return dirEntries;  
@@ -417,6 +417,7 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 	{
 		if(entry.type == EntryType::EntryDA)
 		{
+			entry.virtualPath = GetEncodedDAPath(entry.virtualPath);
 			FormatTo(entry.trackid, "%02u", tracknum++);
 			DAfiles.push_back(&entry);
 		}
@@ -444,7 +445,8 @@ std::list<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::li
 			auto& entry = unrefDAbuff.emplace_back();
 			entry.entry.entryOffs.lsb = track.startSector;
 			entry.entry.entrySize.lsb = track.sizeInSectors * F1_DATA_SIZE;
-			entry.identifier = GetEncodedDAPath("TRACK-" + track.number).string();
+			entry.virtualPath = GetEncodedDAPath("TRACK-" + track.number);
+			entry.identifier = entry.virtualPath.string();
 			entry.type = EntryType::EntryDA;
 
 			// Additional safety check in case the .cue file had a wrong pause size
@@ -575,7 +577,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 	{
         if (entry.subdir == nullptr) // Do not extract directories, they're already prepared
 		{
-			const fs::path outputPath = rootPath / entry.virtualPath / entry.identifier;
+			const fs::path outputPath = rootPath / entry.virtualPath;
 			if (entry.type == EntryType::EntryXA)
 			{
 				// Extract XA or STR file.
@@ -635,13 +637,12 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				bool isInvalid = !global::cueFile.multiBIN
 					? !reader.SeekToSector(entry.entry.entryOffs.lsb)
 					: !multiBinSeeker(entry.entry.entryOffs.lsb, entry, reader, global::cueFile);
-                auto daOutPath = GetEncodedDAPath(outputPath);
-				auto outFile = OpenScopedFile(daOutPath, "wb");
+				auto outFile = OpenScopedFile(outputPath, "wb");
 
 				if (isInvalid && !param::noWarns)
 				{
-					printf( "\nWARNING: The CDDA file \"%" PRFILESYSTEM_PATH "\" is out of the iso file bounds.\n"
-							"\t This usually means that the game has audio tracks, and they are on separate files.\n", daOutPath.filename().c_str() );
+					printf( "\nWARNING: The CDDA file \"%s\" is out of the iso file bounds.\n"
+							"\t This usually means that the game has audio tracks, and they are on separate files.\n", entry.identifier.c_str() );
 					if (global::cueFile.tracks.empty())
 					{
 						printf("\t Try using a .cue file, instead of an ISO image, to be able to access those files.\n");
@@ -656,12 +657,12 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				}
 				else if (!param::QuietMode)
 				{
-					printf("    Extracting audio \"%" PRFILESYSTEM_PATH "\"... ", daOutPath.c_str());
+					printf("    Extracting audio \"%" PRFILESYSTEM_PATH "\"... ", outputPath.c_str());
 				}
 				fflush(stdout);
 
 				if (!outFile) {
-					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", daOutPath.filename().c_str());
+					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outputPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
 
@@ -751,11 +752,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 		if(entry.trackid.empty())
 			continue; // Skip unreferenced entries
 
-		fs::path toChange(rootPath / entry.virtualPath / entry.identifier);
-		if(entry.type == EntryType::EntryDA)
-		{
-			toChange = GetEncodedDAPath(toChange);
-		}
+		fs::path toChange(rootPath / entry.virtualPath);
 		UpdateTimestamps(toChange, entry.entry.entryDate);
 	}
 }
@@ -793,12 +790,9 @@ void ParseDIR()
 
 		for (const auto &fsEntry : iterator)
 		{
-			auto &entry = dirEntries->dirEntryList.EmplaceBack(cd::IsoDirEntries::Entry
-			{
-				.identifier  = fsEntry.path().filename().string(),
-				.virtualPath = (path == param::outPath) ? fs::path() : path.lexically_proximate(param::outPath),
-				.type		 = EntryType::EntryFile
-			});
+			auto &entry		  = dirEntries->dirEntryList.EmplaceBack();
+			entry.identifier  = U8ToSv(fsEntry.path().filename().u8string());
+			entry.virtualPath = fsEntry.path().lexically_proximate(param::outPath);
 
 			if (level == 1 && entry.identifier.length() >= 7)
 			{
@@ -820,7 +814,6 @@ void ParseDIR()
 				{
 					printf("\nWARNING: Exceeded maximum directories (%d) for LIBCD CdSearchFile() at \"%" PRFILESYSTEM_PATH "\"\n", CdlMAXDIR, path.c_str());
 				}
-				entry.type	 = EntryType::EntryDir;
 				entry.subdir = self(self, dirEntries->dirEntryList.NewView(), fsEntry.path(), CdlMAXFILE, level + 1);
 			}
 			else
@@ -837,6 +830,10 @@ void ParseDIR()
 				{
 					entry.type = EntryType::EntryDA;
 					entry.entry.entryOffs.lsb = ++postGap; // Do not change. Used only to avoid calculating deltas at XML write time
+				}
+				else
+				{
+					entry.type = EntryType::EntryFile;
 				}
 			}
 		}
