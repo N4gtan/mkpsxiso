@@ -1277,12 +1277,11 @@ int ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, const fs::path&
 		? (xmlPath / reinterpret_cast<const char8_t*>(dirTreePath)).lexically_normal()
 		: xmlPath;
 
-	cd::ISO_DATESTAMP rootDate = volumeDate;
 	if (const char* rootDateStr = directoryTree->Attribute(xml::attrib::ENTRY_DATE))
 	{
-		ParseDateFromString(rootDate, rootDateStr, volumeDate.GMToffs);
+		ParseDateFromString(volumeDate, rootDateStr, volumeDate.GMToffs);
 	}
-	iso::DIRENTRY& root = iso::DirTreeClass::CreateRootDirectory(entries, rootDate, ReadEntryAttributes(defaultAttributes, directoryTree));
+	iso::DIRENTRY& root = iso::DirTreeClass::CreateRootDirectory(entries, volumeDate, ReadEntryAttributes(defaultAttributes, directoryTree));
 	iso::DirTreeClass* dirTree = root.subdir.get();
 
 	if ( !ParseDirectory(dirTree, directoryTree, xmlPath, defaultAttributes, currentPath) )
