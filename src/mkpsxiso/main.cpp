@@ -37,26 +37,25 @@ iso::DirTreeClass* ParseISOfileSystem(const tinyxml2::XMLElement* trackElement, 
 
 bool PackFileAsCDDA(void* buffer, const fs::path& audioFile);
 
-bool UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const unsigned lba)
+iso::DIRENTRY* UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const unsigned lba)
 {
-	for(auto& entry : entries)
+	for(auto it = entries.rbegin(); it != entries.rend(); ++it)
 	{
+		auto& entry = *it;
 		if(entry.trackid != trackid) continue;
-		if(entry.lba != iso::DA_FILE_PLACEHOLDER_LBA)
+		if(entry.lba == 0)
 		{
-			printf( "ERROR: Cannot replace entry.lba for trackid=\"%s\" when it is not 0x%X\n", entry.trackid.c_str(), iso::DA_FILE_PLACEHOLDER_LBA);
-			return false;
+			entry.lba = lba;
 		}
-		entry.lba = lba;
 		if ( !global::QuietMode )
 		{
 			printf("    DA File \"%s\"\n", entry.id.c_str());
 		}
-		return true;
+		return &entry;
 	}
 
 	printf( "ERROR: Did not find entry with trackid %s\n",  trackid);
-	return false;
+	return nullptr;
 }
 
 int Main(int argc, char* argv[])

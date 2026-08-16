@@ -167,9 +167,6 @@ namespace iso
 	};
 
 	void WriteLicenseData(cd::IsoWriter* writer, void* data, const bool& ps2);
-
-	const int DA_FILE_PLACEHOLDER_LBA = 0xDEADBEEF;
-
 };
 
 #endif

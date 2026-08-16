@@ -304,28 +304,24 @@ int iso::DirTreeClass::CalculateTreeLBA(int lba)
 
 	for ( DIRENTRY& entry : entries )
 	{
+		switch (entry.type)
+		{
+			case EntryType::EntryDA:
+				entry.lba = entry.flba; // If not forced, we will compute the lba when computing the CDDA track
+				continue; // DA files don't take up any space in the ISO filesystem, they are just links to CD tracks
+			case EntryType::EntryXA:
+				size = GetSizeInSectors(entry.length, XA_DATA_SIZE);
+				break;
+			case EntryType::EntryDir:
+				entry.length = entry.subdir->CalculateDirEntryLen();
+				[[fallthrough]];
+			default:
+				size = GetSizeInSectors(entry.length);
+		}
 		// Set current LBA to directory record entry
 		entry.lba = (entry.flba)
 			? entry.flba
 			: lba;
-
-		// If it is a subdir
-		if (entry.subdir != nullptr)
-		{
-			entry.length = entry.subdir->CalculateDirEntryLen();
-			size = GetSizeInSectors(entry.length);
-		}
-		else if (entry.type != EntryType::EntryDA)
-		{
-			// Increment LBA by the size of file
-			size = GetSizeInSectors(entry.length, entry.type == EntryType::EntryXA ? XA_DATA_SIZE : F1_DATA_SIZE);
-		}
-		else
-		{
-			// DA files don't take up any space in the ISO filesystem, they are just links to CD tracks
-			entry.lba = iso::DA_FILE_PLACEHOLDER_LBA; // we will write the lba into the filesystem when writing the CDDA track
-			continue;
-		}
 
 		// Prevent rewind on forced LBAs
 		lba = std::max(lba, entry.lba + size);
