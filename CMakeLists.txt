@@ -18,6 +18,10 @@ set(CMAKE_CXX_EXTENSIONS		OFF)
 set(BUILD_SHARED_LIBS			OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY	"MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Enable Link Time Optimization (LTO/IPO) for Release builds
+include(CheckIPOSupported)
+check_ipo_supported(RESULT CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
+
 # Useful paths
 set(mkpsxiso_dir "src/mkpsxiso")
 set(dumpsxiso_dir "src/dumpsxiso")
@@ -67,9 +71,12 @@ if(NOT MKPSXISO_NO_LIBFLAC)
 		set(WITH_FORTIFY_SOURCE OFF CACHE INTERNAL "")
 	endif()
 	add_subdirectory(flac EXCLUDE_FROM_ALL)
+	target_compile_options(FLAC PRIVATE $<$<C_COMPILER_ID:GNU>:-Wno-inline>) # Silence GCC LTO inlining noise from libFLAC
 endif()
 
 # Add ghc to support filesystem on MacOS
+macro(cmake_minimum_required)	# Workaround for ghc deprecation warning until
+endmacro()						# upstream updates its cmake_minimum_required
 add_subdirectory(ghc EXCLUDE_FROM_ALL)
 
 ## Internal dependencies
