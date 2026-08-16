@@ -1,5 +1,5 @@
 #include "cdreader.h"
-#include "platform.h"
+#include "cue.h"
 
 cd::IsoReader::IsoReader()
 {
@@ -10,7 +10,7 @@ cd::IsoReader::~IsoReader()
 	Close();
 }
 
-bool cd::IsoReader::Open(const fs::path& fileName)
+bool cd::IsoReader::OpenImpl(const fs::path& fileName)
 {
 	Close();
 
@@ -19,16 +19,30 @@ bool cd::IsoReader::Open(const fs::path& fileName)
     if (filePtr == NULL)
 		return(false);
 
-	totalSectors = GetSize(fileName) / CD_SECTOR_SIZE;
+	setvbuf(filePtr, nullptr, _IOFBF, 1024*1024); // 1MiB buffer for better read performance
+	return true;
+}
 
-	if (!ReadSector())
-	{
-		Close();
-		return false;
-	}
+bool cd::IsoReader::Open(const fs::path& fileName)
+{
+	if (!OpenImpl(cue::Load(fileName)))
+        return false;
 
     currentByte		= 0;
     currentSector	= 0;
+
+	if (!cue::cueFile.tracks.empty())
+	{
+		trackPtr	 = &cue::cueFile.tracks.front();
+		trackOffset  = trackPtr->offset - static_cast<int>(trackPtr->file->begSector);
+		totalSectors = cue::cueFile.totalLBA;
+	}
+	else
+	{
+		trackPtr	 = nullptr;
+		trackOffset  = 0;
+		totalSectors = GetSize(fileName) / CD_SECTOR_SIZE;
+	}
 
 	return(true);
 
@@ -121,9 +135,23 @@ bool cd::IsoReader::SeekToSector(const uint32_t sector)
 	if (sector >= totalSectors || filePtr == nullptr)
 		return false;
 
-    if (SeekFile(filePtr, CD_SECTOR_SIZE*static_cast<int64_t>(sector), SEEK_SET) != 0 ||
+	if (trackPtr != nullptr &&
+		(static_cast<int>(sector) < trackPtr->gapLBA || sector > trackPtr->endLBA))
+	{
+		auto it = std::upper_bound(cue::cueFile.tracks.begin(), cue::cueFile.tracks.end(), sector,
+			[](uint32_t s, const auto& t) { return s <= t.endLBA; });
+
+		if (trackPtr->file != it->file && !OpenImpl(it->file->path))
+			return false;
+
+		trackPtr	= &*it;
+		trackOffset = it->offset - static_cast<int>(it->file->begSector);
+	}
+
+	if (SeekFile(filePtr, CD_SECTOR_SIZE*static_cast<int64_t>(sector + trackOffset), SEEK_SET) != 0 ||
 		!ReadSector())
 	{
+		currentByte = CD_SECTOR_SIZE;
 		return false;
 	}
 

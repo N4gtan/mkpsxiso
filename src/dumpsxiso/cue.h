@@ -1,28 +1,40 @@
 #pragma once
 
-#include "cdreader.h"
+#include "platform.h"
+#include <deque>
+#include <vector>
 
 namespace cue
 {
+struct FileInfo
+{
+	fs::path	path;
+	std::string type;
+	uint32_t	begSector;
+	uint32_t	endSector;
+};
+
 struct TrackInfo
 {
-	fs::path filePath;
-	std::string fileType;
-	std::string number;
+	FileInfo*	file;
 	std::string type;
-	std::string startTime;
-	unsigned int startSector;
-	unsigned int sizeInSectors;
-	unsigned int endSector;
+	std::string time;
+	char		number[4];
+	int32_t 	offset;
+	int32_t 	gapLBA;
+	uint32_t	begLBA;
+	uint32_t	length;
+	uint32_t	endLBA;
 };
 
-struct CueFile
+struct CueInfo
 {
 	bool multiBIN = false;
-	unsigned int totalSectors = 0;
+	uint32_t totalLBA = 0;
+	std::deque<FileInfo> files;
 	std::vector<TrackInfo> tracks;
 };
+inline CueInfo cueFile;
 
-CueFile parseCueFile(fs::path& inputFile);
-bool multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &entry, cd::IsoReader &reader, const CueFile &cueFile);
+const fs::path& Load(const fs::path& inputFile);
 }

@@ -5,6 +5,7 @@
 #include "xa.h"
 #include "listview.h"
 
+namespace cue { struct TrackInfo; }
 namespace cd {
 
     // ISO reader class which allows you to read data from an ISO image whilst filtering out CD encoding
@@ -20,11 +21,15 @@ namespace cd {
         // Mode 2 Form 2 sector struct for simplified reading of sectors (usually points to sectorBuff[])
         SECTOR_M2F2* sectorM2F2 = nullptr;
         // Current sector number
-        int			currentSector = 0;
+        uint32_t	currentSector = 0;
         // Current data offset in current sector
         size_t		currentByte = 0;
 		// Total number of sectors in the iso
-		int totalSectors = 0;
+        uint32_t    totalSectors = 0;
+        // Track physical sector offset
+        int32_t     trackOffset = 0;
+        // Pointer to current active track
+        cue::TrackInfo* trackPtr = nullptr;
     public:
 
         // Initializer
@@ -47,7 +52,7 @@ namespace cd {
         // Skip bytes from M2F1 sector payload (2048: Data) (supports sequential skipping)
         size_t SkipBytes(size_t bytes, bool singleSector = false);
 
-        // Seek to a sector in the ISO image in sector units (returns true if success)
+        // Seek to a LBA in the ISO image in sector units (returns true if success)
         bool SeekToSector(const uint32_t sector);
 
         // Seek to a data offset in the ISO image in byte units (returns true if success)
@@ -62,6 +67,7 @@ namespace cd {
     private:
         bool ReadSector();
         bool PrepareNextSector();
+        bool OpenImpl(const fs::path& fileName);
         template <bool Skip>
         size_t ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd);
 

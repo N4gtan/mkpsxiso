@@ -1,4 +1,3 @@
-#include "platform.h"
 #include "xmlwriter.h"
 #include "cue.h"
 #include <array>
@@ -57,7 +56,6 @@ namespace param {
 
 namespace global
 {
-	cue::CueFile cueFile;
 	bool ps2 = false;
 	bool xa_edc = true;
 	std::string licenseFile;
@@ -411,9 +409,9 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 		}
 	}
 
-	if (tracknum <= global::cueFile.tracks.size())
+	if (tracknum <= cue::cueFile.tracks.size())
 	{
-		for(const auto& track : global::cueFile.tracks)
+		for(const auto& track : cue::cueFile.tracks)
 		{
 			// Skip non audio tracks
 			if (track.type != "AUDIO")
@@ -421,7 +419,7 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 			// Skip referenced DA tracks
 			if (tracknum > 2 && std::any_of(DAfiles.begin(), DAfiles.end(), [&track](const auto* entry)
 									{
-										return entry->entry.entryOffs.lsb == track.startSector;
+										return entry->entry.entryOffs.lsb == track.begLBA;
 									}))
 			{
 				continue;
@@ -429,11 +427,11 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 
 			// Add the unreferenced DA track to entries for further extraction
 			auto& entry = entries.emplace_back();
-			entry.entry.entryOffs.lsb = track.startSector;
-			entry.entry.entrySize.lsb = track.sizeInSectors * F1_DATA_SIZE;
+			entry.entry.entryOffs.lsb = track.begLBA;
+			entry.entry.entrySize.lsb = track.length * F1_DATA_SIZE;
 			entry.entry.flags = 0x20; // We are setting the reserved bit 5 to simulate obfuscation
 			FormatTo(entry.trackid, "%02zu", DAfiles.size() + 2);
-			entry.virtualPath = GetEncodedDAPath("TRACK-" + track.number);
+			entry.virtualPath = GetEncodedDAPath("TRACK-" + entry.trackid);
 			entry.identifier = entry.virtualPath.string();
 			entry.type = EntryType::EntryDA;
 
@@ -441,7 +439,7 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 			// For ex, Mega Man X3 track 30 had 149 sectors pause, but at redump.org says it was a 150 standard one
 			unsigned char sectorBuff[CD_SECTOR_SIZE];
 			unsigned char emptyBuff[CD_SECTOR_SIZE] {};
-			while (reader.SeekToSector(entry.entry.entryOffs.lsb - 1) || multiBinSeeker(entry.entry.entryOffs.lsb - 1, entry, reader, global::cueFile))
+			while (reader.SeekToSector(entry.entry.entryOffs.lsb - 1))
 			{
 				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
 				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE) == 0)
@@ -470,9 +468,6 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 				FormatTo(entry->trackid, "%02u", tracknum++);
 			}
 		}
-
-		// Reopen the first file for safety
-		reader.Open(global::cueFile.tracks[0].filePath);
 	}
 
 	return DAfiles;
@@ -571,6 +566,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 		{
 			const fs::path outPath	= rootPath / entry.virtualPath;
 			unique_file outFile 	= OpenScopedFile(outPath, "wb");
+			const bool isInvalid	= !reader.SeekToSector(entry.entry.entryOffs.lsb);
 
 			if (entry.type == EntryType::EntryXA)
 			{
@@ -584,7 +580,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 				}
 				fflush(stdout);
 
-				if (outFile == NULL || !reader.SeekToSector(entry.entry.entryOffs.lsb))
+				if (outFile == nullptr || isInvalid)
 				{
 					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outPath.filename().c_str());
 					exit(EXIT_FAILURE);
@@ -608,15 +604,12 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 					printf("\n  Creating CDDA files...\n");
 					printedDA = true;
 				}
-				bool isInvalid = !global::cueFile.multiBIN
-					? !reader.SeekToSector(entry.entry.entryOffs.lsb)
-					: !multiBinSeeker(entry.entry.entryOffs.lsb, entry, reader, global::cueFile);
 
 				if (isInvalid && !param::noWarns)
 				{
 					printf( "\nWARNING: The CDDA file \"%s\" is out of the iso file bounds.\n"
 							"\t This usually means that the game has audio tracks, and they are on separate files.\n", entry.identifier.c_str() );
-					if (global::cueFile.tracks.empty())
+					if (cue::cueFile.tracks.empty())
 					{
 						printf("\t Try using a .cue file, instead of an ISO image, to be able to access those files.\n");
 					}
@@ -672,8 +665,8 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 					fflush(stdout);
 				}
 
-				reader.SeekToSector(entry.entry.entryOffs.lsb);
-				if (outFile == NULL) {
+				if (outFile == nullptr || isInvalid)
+				{
 					printf("\nERROR: Cannot create file \"%" PRFILESYSTEM_PATH "\"\n", outPath.filename().c_str());
 					exit(EXIT_FAILURE);
 				}
@@ -945,9 +938,9 @@ void ParseISO(cd::IsoReader& reader) {
 		if (it->type != EntryType::EntryDA)
 	 	{
 	 		endFS = it->entry.entryOffs.lsb + GetSizeInSectors(it->entry.entrySize.lsb);
-			if (!global::cueFile.tracks.empty() && global::cueFile.tracks[0].endSector <= totalLenLBA)
+			if (!cue::cueFile.tracks.empty() && cue::cueFile.tracks[0].length <= totalLenLBA)
 			{
-				endFS += postGap = global::cueFile.tracks[0].endSector - endFS;
+				endFS += postGap = cue::cueFile.tracks[0].length - endFS;
 			}
 			else if (!DAfiles.empty())
 			{
@@ -1004,7 +997,7 @@ void ParseISO(cd::IsoReader& reader) {
 		{
 			printf( "WARNING: There is still a gap of %u sectors at the end of file system.\n"
 					"\t This could mean that there are missing files or tracks.\n", postGap > 150 ? postGap : totalLenLBA - currentLBA);
-			if (global::cueFile.tracks.empty())
+			if (cue::cueFile.tracks.empty())
 			{
 				printf("\t Try using a .cue file instead of an ISO image.\n");
 			}
@@ -1194,11 +1187,6 @@ int Main(int argc, char *argv[])
 		param::outPath = param::isoFile;
 		ParseDIR();
 		return EXIT_SUCCESS;
-	}
-
-	if (CompareICase(param::isoFile.extension().string(), ".cue"))
-	{
-		global::cueFile = cue::parseCueFile(param::isoFile);
 	}
 
 	if (!reader.Open(param::isoFile)) {

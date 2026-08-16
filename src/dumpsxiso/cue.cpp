@@ -1,176 +1,220 @@
 #include "cue.h"
-#include "platform.h"
+#include "common.h"
 
-bool cue::multiBinSeeker(const unsigned int sector, const cd::IsoDirEntries::Entry &entry, cd::IsoReader &reader, const CueFile &cueFile)
+static std::vector<std::string_view> tokenizeLine(char* buffer, int lineNumber)
 {
-	int trackIndex = (entry.trackid.empty() ? std::stoi(entry.identifier.substr(6, 2)) : std::stoi(entry.trackid)) - 1;
-	if (trackIndex < 1 || trackIndex >= static_cast<int>(cueFile.tracks.size()))
+	std::string_view line(buffer);
+	std::vector<std::string_view> tokens;
+	tokens.reserve(3);
+
+	size_t pos = 0;
+	constexpr std::string_view delimiters = " \t\r\n";
+	while ((pos = line.find_first_not_of(delimiters, pos)) != std::string_view::npos) [[likely]]
 	{
-		printf("Error: Invalid cue TRACK index \"%02d\" for AUDIO file.\n", trackIndex + 1);
-		exit(EXIT_FAILURE);
+		size_t endPos;
+		if (line[pos] == '"')
+		{
+			endPos = line.find('"', ++pos);
+			if (endPos == std::string_view::npos) [[unlikely]]
+			{
+				printf("Error: Missing quotation on line %d\n", lineNumber);
+				exit(EXIT_FAILURE);
+			}
+		}
+		else
+		{
+			endPos = line.find_first_of(delimiters, pos);
+			if (endPos == std::string_view::npos) [[unlikely]]
+			{
+				tokens.push_back(line.substr(pos));
+				break;
+			}
+		}
+		buffer[endPos] = '\0';
+		tokens.push_back(line.substr(pos, endPos - pos));
+		pos = endPos + 1;
 	}
-	reader.Open(cueFile.tracks[trackIndex].filePath);
-	return reader.SeekToSector(sector - cueFile.tracks[trackIndex - 1].endSector);
+
+	return tokens;
 }
 
-cue::CueFile cue::parseCueFile(fs::path& inputFile)
+const fs::path& cue::Load(const fs::path& inputFile)
 {
-	unique_file file = OpenScopedFile(inputFile, "r");
-	if (file == nullptr)
-	{
-		printf("ERROR: Cannot open file \"%" PRFILESYSTEM_PATH "\"\n", inputFile.c_str());
-		exit(EXIT_FAILURE);
-	}
+	cueFile = {};
+	if (!CompareICase(inputFile.extension().string(), ".cue"))
+		return inputFile;
 
-	CueFile cueFile;
-	std::string fileType;
-	fs::path filePath = inputFile;
-	int fileSectors;
+	unique_file fp = OpenScopedFile(inputFile, "rb");
+	if (fp == nullptr) [[unlikely]]
+		return inputFile;
+
+	int cmdBitFlag = -1;
+	int idx0Sector = 0; // INDEX 00 command
 	int lineNumber = 1;
-	int pregapSectors = 150;
-	int pregapStartSector = 0;
-	int previousStartSector = 0;
+	int pregapSize = 0; // PREGAP command
+	int virtualGap = 0; // Cumulative PREGAP sectors
+	FileInfo* file = nullptr;
+	TrackInfo* track = nullptr;
+	const fs::path dirPath = inputFile.parent_path();
 
-	auto finalizeTrack = [&cueFile](TrackInfo &lastTrack) -> void
+	auto finalizeTrack = [](TrackInfo& t, const uint32_t nextPregapLBA) -> void
 	{
-		lastTrack.sizeInSectors = cueFile.totalSectors - lastTrack.startSector;
-		lastTrack.endSector = lastTrack.startSector + lastTrack.sizeInSectors;
+		t.length = nextPregapLBA - t.begLBA;
+		t.endLBA = nextPregapLBA - 1;
 	};
-	
-	auto parseCueTime = [lineNumber](std::string_view line, const size_t offset) -> int
+
+	auto parseCueTime = [lineNumber](const char* timecode) -> int
 	{
-		std::string timecode(line.substr(offset, line.find_first_of("\r\n") - offset));
 		int sectors = TimecodeToSectors(timecode);
-		if (sectors < 0)
+		if (sectors < 0) [[unlikely]]
 		{
-			printf("Error: Invalid cue file timecode \"%s\" on line %d\n", timecode.c_str(), lineNumber);
+			printf("Error: Invalid CUE file timecode \"%s\" on line %d\n", timecode, lineNumber);
 			exit(EXIT_FAILURE);
 		}
 		return sectors;
 	};
 
 	char buffer[1024];
-	while (std::fgets(buffer, sizeof(buffer), file.get()) != nullptr)
+	for (; std::fgets(buffer, sizeof(buffer), fp.get()) != nullptr; ++lineNumber) [[likely]]
 	{
-		size_t commandPos;
-		std::string_view line(buffer);
+		auto tokens = tokenizeLine(buffer, lineNumber);
 
-		if (commandPos = line.find("FILE"); commandPos != std::string::npos)
+		if (tokens.size() < 3) [[unlikely]]
 		{
-			if (!cueFile.tracks.empty())
+			if (tokens.size() == 2)
+				goto pregap;
+
+			continue;
+		}
+
+		if (CompareICase(tokens[0], "INDEX"))
+		{
+			if (track == nullptr) [[unlikely]]
 			{
-				finalizeTrack(cueFile.tracks.back());
+				printf("Error: INDEX command appears before any TRACK declaration on line %d\n", lineNumber);
+				exit(EXIT_FAILURE);
+			}
+
+			const int sector = file->begSector - virtualGap + parseCueTime(tokens[2].data());
+			if (tokens[1] == "01" || tokens[1] == "1")
+			{
+				if (cmdBitFlag & 1) [[unlikely]]
+				{
+					printf("Error: Duplicated INDEX 01 command for TRACK %s on line %d\n", track->number, lineNumber);
+					exit(EXIT_FAILURE);
+				}
+				cmdBitFlag |= 1;
+
+				if (const size_t size = cueFile.tracks.size(); size > 1)
+				{
+					auto& prevTrack = cueFile.tracks[size - 2];
+
+					// Only true for the 2nd+ track within the same FILE command.
+					if (prevTrack.length == 0)
+						finalizeTrack(prevTrack, (idx0Sector <= static_cast<int>(prevTrack.begLBA)) ? (sector - pregapSize) : idx0Sector);
+
+					track->gapLBA = prevTrack.endLBA + 1;
+					track->begLBA = sector;
+				}
+				else // Track 01
+				{
+					virtualGap	  = sector;
+					track->gapLBA = -sector;
+					cueFile.totalLBA -= sector;
+				}
+				track->file   = file;
+				track->time   = SectorsToTimecode(track->begLBA);
+				track->offset = virtualGap;
+
+				idx0Sector = -1; // Reset
+				pregapSize = 0; // Reset
+			}
+			else if (tokens[1] == "00" || tokens[1] == "0")
+			{
+				if (cmdBitFlag != 0) [[unlikely]]
+				{
+					printf("Error: Invalid INDEX 00 usage for TRACK %s on line %d\n", track->number, lineNumber);
+					exit(EXIT_FAILURE);
+				}
+				cmdBitFlag |= 2;
+				idx0Sector = sector;
+			}
+		}
+		else if (CompareICase(tokens[0], "TRACK"))
+		{
+			if (file == nullptr) [[unlikely]]
+			{
+				printf("Error: TRACK command appears before any FILE declaration on line %d\n", lineNumber);
+				exit(EXIT_FAILURE);
+			}
+
+			cmdBitFlag = 0;
+			track = &cueFile.tracks.emplace_back();
+			tokens[1].copy(track->number, sizeof(track->number) - 1);
+			track->type = CompareICase(tokens[2], "AUDIO") ? "AUDIO" : tokens[2];
+		}
+		else if (CompareICase(tokens[0], "FILE"))
+		{
+			if (track != nullptr && track->file != nullptr)
+			{
+				finalizeTrack(*track, cueFile.totalLBA);
 				cueFile.multiBIN = true;
 			}
 
-			size_t firstQuote = line.find('"');
-			size_t lastQuote = line.rfind('"');
-			std::string fileName(line.substr(firstQuote + 1, lastQuote - firstQuote - 1));
-			filePath.replace_filename(reinterpret_cast<const char8_t*>(fileName.c_str()));
-			if (int64_t fileSize = GetSize(filePath); fileSize < 0)
+			fs::path filePath = (dirPath / reinterpret_cast<const char8_t*>(tokens[1].data())).lexically_normal();
+			const int64_t fileSize = GetSize(filePath);
+			if (fileSize < 0) [[unlikely]]
 			{
-				printf("Error: Failed to get the file size for \"%s\"\n", fileName.c_str());
+				printf("Error: Failed to get the file size for \"%" PRFILESYSTEM_PATH "\"\n", filePath.c_str());
 				exit(EXIT_FAILURE);
 			}
-			else
+			if (fileSize % CD_SECTOR_SIZE != 0) [[unlikely]]
 			{
-				if (fileSize % CD_SECTOR_SIZE != 0)
+				printf("Error: File size for \"%" PRFILESYSTEM_PATH "\" is not a multiple of 2352\n", filePath.c_str());
+				exit(EXIT_FAILURE);
+			}
+			const int totalSec  = static_cast<int>(fileSize / CD_SECTOR_SIZE);
+			cueFile.totalLBA   += totalSec;
+
+			const int begSector = file != nullptr ? file->endSector + 1 : 0;
+			file = &cueFile.files.emplace_back(std::move(filePath));
+			file->type			= tokens[2];
+			file->begSector		= begSector;
+			file->endSector		= begSector + totalSec - 1;
+		}
+		else [[unlikely]]
+		{
+		pregap:
+			if (CompareICase(tokens[0], "PREGAP"))
+			{
+				if (track == nullptr) [[unlikely]]
 				{
-					printf("Error: File size for \"%s\" is not a multiple of 2352\n", fileName.c_str());
+					printf("Error: PREGAP command appears before any TRACK declaration on line %d\n", lineNumber);
 					exit(EXIT_FAILURE);
 				}
-				fileSectors = static_cast<int>(fileSize / CD_SECTOR_SIZE);
-				cueFile.totalSectors += fileSectors;
-			}
-
-			if (line.find("BINARY") != std::string::npos)
-			{
-				fileType = "BINARY";
-			}
-			else
-			{
-				fileType = "UNKNOWN";
-			}
-
-			// We set inputFile to the first track entry in the cue because that's the main DATA file
-			if (cueFile.tracks.empty())
-			{
-				inputFile = filePath;
-			}
-		}
-		else if (commandPos = line.find("TRACK"); commandPos != std::string::npos)
-		{
-			TrackInfo track{};
-			track.number = line.substr(commandPos + sizeof("TRACK"), 2);
-			track.filePath = filePath;
-			track.fileType = fileType;
-
-			if (line.find("AUDIO") != std::string::npos)
-			{
-				track.type = "AUDIO";
-			}
-			else if (line.find("MODE2/2352") != std::string::npos)
-			{
-				track.type = "MODE2/2352";
-			}
-			else
-			{
-				track.type = "UNKNOWN";
-			}
-
-			cueFile.tracks.push_back(track);
-		}
-		else if (commandPos = line.find("INDEX 01"); commandPos != std::string::npos)
-		{
-			int startSector = parseCueTime(line, commandPos + sizeof("INDEX 01"));
-
-			std::string startTime;
-			if (cueFile.multiBIN)
-			{
-				pregapSectors = startSector;
-				startSector = cueFile.totalSectors - fileSectors + pregapSectors;
-				pregapStartSector = startSector - pregapSectors;
-				startTime = SectorsToTimecode(startSector);
-				pregapSectors = 150; // Reset
-			}
-			else if (pregapStartSector <= 0)
-			{
-				pregapStartSector = startSector - pregapSectors;
-				pregapSectors = 150; // Reset
-			}
-
-			if (cueFile.tracks.size() > 1)
-			{
-				cueFile.tracks[cueFile.tracks.size() - 2].sizeInSectors = pregapStartSector - previousStartSector;
-				cueFile.tracks[cueFile.tracks.size() - 2].endSector = pregapStartSector;
-				pregapStartSector = 0; // Reset
-			}
-
-			cueFile.tracks.back().startTime = startTime;
-			cueFile.tracks.back().startSector = startSector;
-			previousStartSector = startSector;
-		}
-		else if (!cueFile.multiBIN)
-		{
-			if (commandPos = line.find("INDEX 00"); commandPos != std::string::npos)
-			{
-				pregapStartSector = parseCueTime(line, commandPos + sizeof("INDEX 00"));
-			}
-			else if (commandPos = line.find("PREGAP"); commandPos != std::string::npos)
-			{
-				pregapSectors = parseCueTime(line, commandPos + sizeof("PREGAP"));
+				if (cmdBitFlag != 0) [[unlikely]]
+				{
+					printf("Error: Invalid PREGAP usage for TRACK %s on line %d\n", track->number, lineNumber);
+					exit(EXIT_FAILURE);
+				}
+				cmdBitFlag |= 4;
+				pregapSize  = parseCueTime(tokens[1].data());
+				virtualGap -= pregapSize;
+				cueFile.totalLBA += pregapSize;
 			}
 		}
 		// Silently skip unsupported commands.
 		// TODO: Support indexes > 01 if a real-world PSX case appears.
-
-		lineNumber++;
 	}
 
-	if (!cueFile.tracks.empty())
+	if (track == nullptr) [[unlikely]]
 	{
-		finalizeTrack(cueFile.tracks.back());
+		printf("Error: Invalid CUE file \"%" PRFILESYSTEM_PATH "\", no TRACK found\n", inputFile.c_str());
+		exit(EXIT_FAILURE);
 	}
 
-	return cueFile;
+	finalizeTrack(*track, cueFile.totalLBA);
+
+	// The first track in the cue MUST be the main DATA one
+	return cueFile.tracks.front().file->path;
 }
