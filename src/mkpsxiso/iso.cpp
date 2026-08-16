@@ -680,14 +680,14 @@ void iso::DirTreeClass::OutputHeaderListing(FILE* fp, const int level, const cha
 void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 {
 	// Helper lambda to print common details
-	auto printEntryDetails = [&](const char* type, const char* name, const char* sectors, const DIRENTRY& entry)
+	auto printEntryDetails = [&](const char* type, const char* name, const uint32_t sectors, const DIRENTRY& entry)
 	{
 		// Write entry type with 4 spaces at start
 		fprintf(fp, "%*s%-6s|", level + 4, "", type);
 		// Write entry name
 		fprintf(fp, "%-14s|", name);
 		// Write entry length in sectors
-		fprintf(fp, "%-8s|", sectors);
+		fprintf(fp, "%-8u|", sectors);
 		// Write LBA offset
 		fprintf(fp, "%-7d|", entry.lba);
 		// Write timecode
@@ -696,6 +696,36 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 		fprintf(fp, "%-11s|", entry.type != EntryType::EntryDir ? std::to_string(entry.length).c_str() : "");
 		// Write source file path
 		fprintf(fp, "%s\n", reinterpret_cast<const char*>(entry.srcfile.generic_u8string().c_str()));
+	};
+
+	auto printNonDirEntry = [&printEntryDetails](const DIRENTRY& entry) -> void
+	{
+		const char* typeStr;
+		const char* nameStr = entry.id.c_str();
+
+		switch (entry.type)
+		{
+			case EntryType::EntryDA:
+				printEntryDetails(" CDDA", nameStr, GetSizeInSectors(entry.length, CD_SECTOR_SIZE), entry);
+				return;
+			case EntryType::EntryXA:
+				printEntryDetails("   XA", nameStr, GetSizeInSectors(entry.length, XA_DATA_SIZE), entry);
+				return;
+			case EntryType::EntryFile:
+				typeStr = " File";
+				break;
+			case EntryType::EntryXA_DO:
+				typeStr = "   XA";
+				break;
+			case EntryType::EntryDummy:
+				typeStr = "Dummy";
+				nameStr = "<DUMMY>";
+				break;
+			default:
+				return;
+		}
+
+		printEntryDetails(typeStr, nameStr, GetSizeInSectors(entry.length), entry);
 	};
 
 	int maxlba = 0;
@@ -715,54 +745,25 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 	for (const auto& e : entriesInDir)
 	{
 		const DIRENTRY& entry = e.get();
-		// Skip directories and postgap dummy
-		if (entry.type == EntryType::EntryDir || (entry.type == EntryType::EntryDummy && level == 0 && entry.lba > maxlba))
+		// Skip directories and root postgap dummy/DA-files
+		if (entry.type == EntryType::EntryDir || (level == 0 && entry.lba > maxlba))
 			continue;
 
-		const char* typeStr;
-		std::string nameStr = entry.id;
-		uint32_t sectors = GetSizeInSectors(entry.length);
-
-		switch (entry.type)
-		{
-			case EntryType::EntryFile:
-				typeStr = " File";
-				break;
-			case EntryType::EntryXA_DO:
-				typeStr = "   XA";
-				break;
-			case EntryType::EntryDummy:
-				typeStr = "Dummy";
-				nameStr = "<DUMMY>";
-				break;
-			case EntryType::EntryXA:
-				typeStr = "   XA";
-				sectors = GetSizeInSectors(entry.length, XA_DATA_SIZE);
-				break;
-			case EntryType::EntryDA:
-				typeStr = " CDDA";
-				sectors = 150 + GetSizeInSectors(entry.length, CD_SECTOR_SIZE);
-				break;
-			default:
-				continue;
-		}
-
-		// Print the entry details
-		printEntryDetails(typeStr, nameStr.c_str(), std::to_string(sectors).c_str(), entry);
+		printNonDirEntry(entry);
 	}
 
-	// Print directories and postgap dummy
+	// Print directories and root postgap dummy/DA-files
 	for (const auto& e : entriesInDir)
 	{
 		const DIRENTRY& entry = e.get();
 		if (entry.type == EntryType::EntryDir)
 		{
-			printEntryDetails(" Dir", entry.id.c_str(), "", entry);
+			printEntryDetails(" Dir", entry.id.c_str(), GetSizeInSectors(entry.length), entry);
 			entry.subdir->OutputLBAlisting( fp, level+1 );
 		}
-		else if (entry.type == EntryType::EntryDummy && level == 0 && entry.lba > maxlba)
+		else if (level == 0 && entry.lba > maxlba)
 		{
-			printEntryDetails("Dummy", "<DUMMY>", std::to_string(GetSizeInSectors(entry.length)).c_str(), entry);
+			printNonDirEntry(entry);
 		}
 	}
 
