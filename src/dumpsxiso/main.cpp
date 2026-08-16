@@ -435,20 +435,6 @@ std::vector<cd::IsoDirEntries::Entry*> ParseDAfiles(cd::IsoReader& reader, std::
 			entry.identifier = entry.virtualPath.string();
 			entry.type = EntryType::EntryDA;
 
-			// Additional safety check in case the .cue file had a wrong pause size
-			// For ex, Mega Man X3 track 30 had 149 sectors pause, but at redump.org says it was a 150 standard one
-			unsigned char sectorBuff[CD_SECTOR_SIZE];
-			unsigned char emptyBuff[CD_SECTOR_SIZE] {};
-			while (reader.SeekToSector(entry.entry.entryOffs.lsb - 1))
-			{
-				reader.ReadBytesDA(sectorBuff, CD_SECTOR_SIZE, true);
-				if (memcmp(sectorBuff, emptyBuff, CD_SECTOR_SIZE) == 0)
-					break;
-
-				entry.entry.entryOffs.lsb--;
-				entry.entry.entrySize.lsb += F1_DATA_SIZE;
-			}
-
 			DAfiles.push_back(&entry);
 		}
 
