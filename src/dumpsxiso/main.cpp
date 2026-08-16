@@ -111,7 +111,10 @@ void PrintDate(const char* label, const cd::ISO_LONG_DATESTAMP& date)
 	}
 }
 
-void prepareRIFFHeader(cd::RIFF_HEADER* header, int dataSize) {
+void writeRIFFHeader(FILE* outFile, int dataSize)
+{
+	cd::RIFF_HEADER riffHeader;
+	auto* header = &riffHeader;
 	memcpy(header->chunkID,"RIFF",4);
 	header->chunkSize = 36 + dataSize;
 	memcpy(header->format, "WAVE", 4);
@@ -127,6 +130,7 @@ void prepareRIFFHeader(cd::RIFF_HEADER* header, int dataSize) {
 
 	memcpy(header->subchunk2ID, "data", 4);
 	header->subchunk2Size = dataSize;
+	fwrite(header, 1, sizeof(cd::RIFF_HEADER), outFile);
 }
 
 // This will ensure that the EDC remains the same as in the original file. Games built with an old, buggy Sony's mastering tool version
@@ -198,13 +202,6 @@ void SaveLicense(const cd::ISO_LICENSE& license) {
 
     fwrite(license.data, 1, sizeof(license.data), outFile);
     fclose(outFile);
-}
-
-void writeWaveFile(FILE *outFile, cd::IsoReader& reader, const size_t cddaSize, const bool isInvalid)
-{
-    cd::RIFF_HEADER riffHeader;
-    prepareRIFFHeader(&riffHeader, cddaSize);
-    fwrite((void*)&riffHeader, 1, sizeof(cd::RIFF_HEADER), outFile);
 }
 
 #ifndef MKPSXISO_NO_LIBFLAC
@@ -661,7 +658,7 @@ void ExtractFiles(cd::IsoReader& reader, const std::list<cd::IsoDirEntries::Entr
 					setvbuf(outFile.get(), nullptr, _IONBF, 0); // unbuffered only for us, libFLAC already sets a 10MiB buffer on Windows
 					if (param::encodingFormat == EAF_WAV)
 					{
-						writeWaveFile(outFile.get(), reader, cddaSize, isInvalid);
+						writeRIFFHeader(outFile.get(), cddaSize);
 					}
 
 					if (isInvalid)
