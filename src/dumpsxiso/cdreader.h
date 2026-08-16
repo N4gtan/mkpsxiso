@@ -94,8 +94,8 @@ namespace cd {
             cdxa::ISO_XA_ATTRIB extData;
             std::string identifier;
             fs::path virtualPath;
-            EntryType type;
             std::string trackid;
+            EntryType type;
             std::optional<short> order;
 
             std::unique_ptr<IsoDirEntries> subdir;

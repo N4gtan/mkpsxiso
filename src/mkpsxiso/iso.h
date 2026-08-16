@@ -36,12 +36,11 @@ namespace iso
 		unsigned short	perms;		/// XA permissions
 		unsigned short	GID;		/// Owner group ID
 		unsigned short	UID;		/// Owner user ID
+		signed short	order;		/// Custom Directory Record order
 		std::unique_ptr<class DirTreeClass> subdir;
 
 		cd::ISO_DATESTAMP date;
 		std::string		trackid;	/// only used for DA files
-		signed short	order;
-
 	};
 
 	// EntryList must have stable references!

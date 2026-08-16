@@ -74,12 +74,9 @@ unsigned int SwapBytes32(unsigned int val);
 // Scoped helpers for a few resources
 struct file_deleter
 {
-	void operator()(FILE* file) const
+	void operator()(FILE* file) const noexcept
 	{
-		if (file != nullptr)
-		{
-			std::fclose(file);
-		}
+		std::fclose(file);
 	}
 };
 using unique_file = std::unique_ptr<FILE, file_deleter>;

@@ -1,6 +1,7 @@
 #include "cdwriter.h"
-#include "common.h"
+#include "cd.h"
 #include "edcecc.h"
+#include <cstring>
 
 using namespace cd;
 
@@ -203,7 +204,7 @@ public:
 			PrepareSectorHeader();
 			SetSubHeader(sector->subHead, submode << 16);
 
-			std::fill(std::begin(sector->data), std::end(sector->data), 0);
+			//std::fill(std::begin(sector->data), std::end(sector->data), 0);
 			if (m_edcEccForm == IsoWriter::EdcEccForm::Form1)
 			{
 				CalculateForm1(eccAddr);
@@ -359,7 +360,7 @@ public:
 		{
 			PrepareSectorHeader();
 
-			std::fill(std::begin(sector->subHead), std::end(sector->edc), 0);
+			//std::fill(std::begin(sector->subHead), std::end(sector->edc), 0);
 			if (m_edcEccForm == IsoWriter::EdcEccForm::Form1)
 			{
 				CalculateForm1(eccAddr);

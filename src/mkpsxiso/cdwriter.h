@@ -1,7 +1,6 @@
 #ifndef _CDWRITER_H
 #define _CDWRITER_H
 
-#include "cd.h"
 #include "mmappedfile.h"
 #include <ThreadPool.h>
 #include <forward_list>
