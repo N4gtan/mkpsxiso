@@ -142,12 +142,6 @@ unique_file OpenScopedFile(const fs::path& path, const char* mode)
 	return unique_file { OpenFile(path, mode) };
 }
 
-std::string CleanIdentifier(std::string_view id)
-{
-	std::string result(id.substr(0, id.find_last_of(';')));
-	return result;
-}
-
 bool CompareICase(std::string_view strLeft, std::string_view strRight)
 {
 	return std::equal(strLeft.begin(), strLeft.end(), strRight.begin(), strRight.end(), [](char left, char right)

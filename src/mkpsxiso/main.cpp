@@ -50,7 +50,7 @@ bool UpdateDAFilesWithLBA(iso::EntryList& entries, const char *trackid, const un
 		entry.lba = lba;
 		if ( !global::QuietMode )
 		{
-			printf("    DA File \"%s\"\n", CleanIdentifier(entry.id).c_str());
+			printf("    DA File \"%s\"\n", entry.id.c_str());
 		}
 		return true;
 	}
@@ -705,7 +705,7 @@ int Main(int argc, char* argv[])
 				else
 				{
 					auto& entry = unrefTracks.emplace_back();
-					entry.id = trackSource.stem().string() + ";1";
+					entry.id = trackSource.stem().string();
 					entry.length = audioSize;
 					entry.lba = totalLenLBA;
 					entry.srcfile = trackSource;
@@ -1400,7 +1400,7 @@ static bool ParseFileEntry(iso::DirTreeClass* dirTree, const tinyxml2::XMLElemen
 		}
 
 		// ECMA-119 6.8.2.1 - The path length of any file shall not exceed 255.
-		size_t pathLength = (name + ";1").length();
+		size_t pathLength = name.length() + 2; // 2 = ";1"
 		int depth = dirTree->GetPathDepth(&pathLength);
 		if (pathLength + depth > 255)
 		{

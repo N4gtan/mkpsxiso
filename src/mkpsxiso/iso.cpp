@@ -183,26 +183,20 @@ bool iso::DirTreeClass::AddFileEntry(std::string id, EntryType type, fs::path sr
 		}
 	}
 
-	id += ";1";
-
 	// Check if file entry already exists
     for ( const auto& e : entriesInDir )
 	{
 		const DIRENTRY& entry = e.get();
-		if ( !entry.id.empty() )
+		if ( entry.type != EntryType::EntryDummy && entry.id == id )
 		{
-            if ( ( entry.type != EntryType::EntryDir )
-				&& ( CompareICase( entry.id, id ) ) )
+			if (!global::QuietMode)
 			{
-				if (!global::QuietMode)
-				{
-					printf("      ");
-				}
+				printf("      ");
+			}
 
-				printf("ERROR: Duplicate file entry: %s\n", CleanIdentifier(id).c_str());
+			printf("ERROR: Duplicated entry name \"%s\" in directory \"%s\".\n", id.c_str(), this->m_entry->id.c_str());
 
-				return false;
-            }
+			return false;
 		}
     }
 
@@ -352,7 +346,7 @@ int iso::DirTreeClass::CalculateDirEntryLen() const
 	for ( const auto& e : entriesInDir )
 	{
 		const DIRENTRY& entry = e.get();
-		if ( entry.id.empty() || entry.HF > 1 )
+		if ( entry.type == EntryType::EntryDummy || entry.HF > 1 )
 		{
 			continue;
 		}
@@ -360,6 +354,10 @@ int iso::DirTreeClass::CalculateDirEntryLen() const
 		int dataLen = sizeof(cd::ISO_DIR_ENTRY);
 
 		dataLen += entry.id.length();
+		if ( entry.type != EntryType::EntryDir )
+		{
+			dataLen += 2; // 2 = ";1"
+		}
 		dataLen = RoundToEven(dataLen);
 
 		if ( !global::noXA )
@@ -430,38 +428,48 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 		std::byte buffer[128] {};
 
 		auto dirEntry = reinterpret_cast<cd::ISO_DIR_ENTRY*>(buffer);
+		char* identifierBuffer = reinterpret_cast<char*>(dirEntry+1);
 
+		int length; // File length correction for certain file types
 		if ( entry.type == EntryType::EntryDir )
 		{
 			dirEntry->flags = 0x02 | entry.HF;
+			length = F1_DATA_SIZE * GetSizeInSectors(entry.length);
+
+			if (!currentOrParent.has_value())
+			{
+				// Normal case - write out the identifier
+				dirEntry->identifierLen = entry.id.length();
+				memcpy(identifierBuffer, entry.id.c_str(), dirEntry->identifierLen);
+			}
+			else
+			{
+				// Special cases - current/parent directory entry
+				dirEntry->identifierLen = 1;
+				identifierBuffer[0] = *currentOrParent ? '\1' : '\0';
+			}
 		}
 		else
 		{
 			dirEntry->flags = 0x00 | entry.HF;
-		}
 
-		// File length correction for certain file types
-		int length;
-
-		if ( entry.type == EntryType::EntryXA )
-		{
-			length = F1_DATA_SIZE * GetSizeInSectors(entry.length, XA_DATA_SIZE);
-		}
-		else if ( entry.type == EntryType::EntryDA )
-		{
-			if(entry.lba == iso::DA_FILE_PLACEHOLDER_LBA && !global::noWarns)
+			if ( entry.type == EntryType::EntryXA )
 			{
-				printf("\nWARNING: DA file still has placeholder value 0x%X... ", iso::DA_FILE_PLACEHOLDER_LBA);
+				length = F1_DATA_SIZE * GetSizeInSectors(entry.length, XA_DATA_SIZE);
 			}
-			length = F1_DATA_SIZE * GetSizeInSectors(entry.length, CD_SECTOR_SIZE);
-		}
-		else if (entry.type == EntryType::EntryDir)
-		{
-			length = F1_DATA_SIZE * GetSizeInSectors(entry.length);
-		}
-		else
-		{
-			length = entry.length;
+			else if ( entry.type == EntryType::EntryDA )
+			{
+				length = F1_DATA_SIZE * GetSizeInSectors(entry.length, CD_SECTOR_SIZE);
+			}
+			else
+			{
+				length = entry.length;
+			}
+
+			const size_t idLen = entry.id.length();
+			dirEntry->identifierLen = idLen + 2;
+			memcpy(identifierBuffer, entry.id.c_str(), idLen);
+			memcpy(identifierBuffer + idLen, ";1", 2);
 		}
 
 		dirEntry->entryOffs = SetPair32( entry.lba );
@@ -469,19 +477,6 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 		dirEntry->volSeqNum = SetPair16( 1 );
 		dirEntry->entryDate = entry.date;
 
-		// Normal case - write out the identifier
-		char* identifierBuffer = reinterpret_cast<char*>(dirEntry+1);
-		if (!currentOrParent.has_value())
-		{
-			dirEntry->identifierLen = entry.id.length();
-			strncpy(identifierBuffer, entry.id.c_str(), entry.id.length());
-		}
-		else
-		{
-			// Special cases - current/parent directory entry
-			dirEntry->identifierLen = 1;
-			identifierBuffer[0] = *currentOrParent ? '\1' : '\0';
-		}
 		int entryLength = sizeof(*dirEntry) + dirEntry->identifierLen;
 		entryLength = RoundToEven(entryLength);
 
@@ -533,7 +528,7 @@ void iso::DirTreeClass::WriteDirEntries(cd::IsoWriter* writer, const DIRENTRY* p
 	for ( const auto& e : entriesInDir )
 	{
 		const DIRENTRY& entry = e.get();
-		if ( !entry.id.empty() && entry.HF < 2 )
+		if ( entry.type != EntryType::EntryDummy && entry.HF < 2 )
 		{
 			writeOneEntry(entry);
 		}
@@ -655,7 +650,7 @@ void iso::DirTreeClass::OutputHeaderListing(FILE* fp, const int level, const cha
 	for ( const auto& e : entriesInDir )
 	{
 		const DIRENTRY& entry = e.get();
-		if ( !entry.id.empty() && entry.type != EntryType::EntryDir )
+		if ( entry.type != EntryType::EntryDummy && entry.type != EntryType::EntryDir )
 		{
 			std::string temp_name = "LBA_" + entry.id;
 
@@ -664,12 +659,6 @@ void iso::DirTreeClass::OutputHeaderListing(FILE* fp, const int level, const cha
 				if ( ch == '.' || ch == ' ' || ch == '-' )
 				{
 					ch = '_';
-				}
-
-				if ( ch == ';' )
-				{
-					ch = '\0';
-					break;
 				}
 			}
 
@@ -731,7 +720,7 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 			continue;
 
 		const char* typeStr;
-		std::string nameStr = CleanIdentifier(entry.id);
+		std::string nameStr = entry.id;
 		uint32_t sectors = GetSizeInSectors(entry.length);
 
 		switch (entry.type)
@@ -768,7 +757,7 @@ void iso::DirTreeClass::OutputLBAlisting(FILE* fp, int level) const
 		const DIRENTRY& entry = e.get();
 		if (entry.type == EntryType::EntryDir)
 		{
-			printEntryDetails(" Dir", CleanIdentifier(entry.id).c_str(), "", entry);
+			printEntryDetails(" Dir", entry.id.c_str(), "", entry);
 			entry.subdir->OutputLBAlisting( fp, level+1 );
 		}
 		else if (entry.type == EntryType::EntryDummy && level == 0 && entry.lba > maxlba)
@@ -810,7 +799,7 @@ int iso::DirTreeClass::GetFileCountTotal() const
 		const DIRENTRY& entry = e.get();
 		if ( entry.type != EntryType::EntryDir )
 		{
-			if ( !entry.id.empty() )
+			if ( entry.type != EntryType::EntryDummy )
 			{
 				numfiles++;
 			}

@@ -362,7 +362,7 @@ std::optional<cd::IsoDirEntries::Entry> cd::IsoDirEntries::ReadEntry(cd::IsoRead
 	// We don't need a dirty ID, clean it!
 	if ((entry.entry.flags & 0x02) == 0)
 	{
-		entry.identifier = CleanIdentifier(entry.identifier);
+		entry.identifier = entry.identifier.substr(0, entry.identifier.find_last_of(';'));
 	}
 
 	// ECMA-119 9.1.12 - 00 field present only if file identifier length is an even number
