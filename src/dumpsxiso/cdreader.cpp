@@ -47,51 +47,46 @@ inline bool cd::IsoReader::ReadSector()
 	return true;
 }
 
+template <bool Skip>
 inline size_t cd::IsoReader::ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd)
 {
+	if (bytes == 0) [[unlikely]]
+		return 0;
+
 	size_t bytesRead = 0;
     char* const dataPtr = (char*)ptr;
 
 	if (currentSector >= totalSectors) [[unlikely]]
 		goto eof_fill;
 
-    while(bytes > 0)
+	do
 	{
-		if (currentByte >= dataEnd) [[unlikely]]
-			goto check_next_sector;
-
-		if (currentByte < dataBeg)
-		{
-			currentByte = dataBeg;
-		}
-
-		{
-			const size_t toRead = std::min(dataEnd - currentByte, bytes);
-
-			if (dataPtr != nullptr)
-			{
-				memcpy(dataPtr + bytesRead, &sectorBuff[currentByte], toRead);
-			}
-
-			bytes		-= toRead;
-			bytesRead	+= toRead;
-			currentByte	+= toRead;
-		}
-
 		if (currentByte >= dataEnd)
 		{
-		check_next_sector:
 			if (singleSector)
 				return bytesRead;
 			else if (!PrepareNextSector()) [[unlikely]]
 				goto eof_fill;
 		}
-    }
+
+		currentByte = std::max(currentByte, dataBeg);
+		const size_t toRead = std::min(dataEnd - currentByte, bytes);
+
+		if constexpr (!Skip)
+		{
+			memcpy(dataPtr + bytesRead, sectorBuff + currentByte, toRead);
+		}
+
+		bytes		-= toRead;
+		bytesRead	+= toRead;
+		currentByte	+= toRead;
+
+	} while (bytes > 0);
 
 	return bytesRead;
 
 eof_fill:
-	if (dataPtr != nullptr && bytes > 0)
+	if constexpr (!Skip)
 	{
 		memset(dataPtr + bytesRead, 0, bytes);
 	}
@@ -101,24 +96,24 @@ eof_fill:
 size_t cd::IsoReader::ReadBytes(void* ptr, size_t bytes, bool singleSector)
 {
 	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
-	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
+	return ReadBytesImpl<false>(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesXA(void* ptr, size_t bytes, bool singleSector)
 {
 	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F2, subHead);
-	return ReadBytesImpl(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + XA_DATA_SIZE);
+	return ReadBytesImpl<false>(ptr, bytes, singleSector, DATA_BEG, DATA_BEG + XA_DATA_SIZE);
 }
 
 size_t cd::IsoReader::ReadBytesDA(void* ptr, size_t bytes, bool singleSector)
 {
-	return ReadBytesImpl(ptr, bytes, singleSector, 0, CD_SECTOR_SIZE);
+	return ReadBytesImpl<false>(ptr, bytes, singleSector, 0, CD_SECTOR_SIZE);
 }
 
 size_t cd::IsoReader::SkipBytes(size_t bytes, bool singleSector)
 {
 	constexpr size_t DATA_BEG = offsetof(cd::SECTOR_M2F1, data);
-	return ReadBytesImpl(nullptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
+	return ReadBytesImpl<true>(nullptr, bytes, singleSector, DATA_BEG, DATA_BEG + F1_DATA_SIZE);
 }
 
 bool cd::IsoReader::SeekToSector(const uint32_t sector)
@@ -169,12 +164,7 @@ bool cd::IsoReader::PrepareNextSector()
 	currentByte = 0;
 	currentSector++;
 
-	if (!ReadSector())
-	{
-		return false;
-	}
-
-	return true;
+	return ReadSector();
 }
 
 

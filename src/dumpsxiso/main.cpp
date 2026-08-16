@@ -164,7 +164,7 @@ const bool CheckISOver()
 	{
 		global::ps2 = true;
 	}
-	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE, true);
+	cd::reader->ReadBytesXA(sector.subHead, XA_DATA_SIZE);
 	if (sector.subHead[2] & 0x01)
 	{
 		return false;

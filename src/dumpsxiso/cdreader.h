@@ -62,6 +62,7 @@ namespace cd {
     private:
         bool ReadSector();
         bool PrepareNextSector();
+        template <bool Skip>
         size_t ReadBytesImpl(void* ptr, size_t bytes, const bool singleSector, const size_t dataBeg, const size_t dataEnd);
 
     };
