@@ -938,21 +938,24 @@ void ParseISO(cd::IsoReader& reader) {
 		if (it->type != EntryType::EntryDA)
 	 	{
 	 		endFS = it->entry.entryOffs.lsb + GetSizeInSectors(it->entry.entrySize.lsb);
-			if (!cue::cueFile.tracks.empty() && cue::cueFile.tracks[0].length <= totalLenLBA)
+			if (DAfiles.empty())
 			{
-				endFS += postGap = cue::cueFile.tracks[0].length - endFS;
+				if (totalLenLBA - endFS < postGap)
+				{
+					endFS += postGap = totalLenLBA - endFS;
+					if (postGap != 150 && postGap != 0 && !param::noWarns)
+					{
+						printf("    WARNING: Size of DATA track postgap is of %u sectors instead of 150.\n", postGap);
+					}
+				}
 			}
-			else if (!DAfiles.empty())
+			else if (!cue::cueFile.tracks.empty() && cue::cueFile.tracks.front().length <= totalLenLBA)
+			{
+				endFS += postGap = cue::cueFile.tracks.front().length - endFS;
+			}
+			else
 			{
 				endFS += postGap = (DAfiles.front()->entry.entryOffs.lsb - endFS) / 2;
-			}
-			else if (totalLenLBA - endFS < postGap)
-			{
-				endFS += postGap = totalLenLBA - endFS;
-				if (postGap && !param::noWarns)
-				{
-					printf("    WARNING: Size of DATA track postgap is of %u sectors instead of 150.\n", postGap);
-				}
 			}
 			break;
 		}
