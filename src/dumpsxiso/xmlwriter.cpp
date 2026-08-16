@@ -167,6 +167,10 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 				const fs::path outputPath = sourcePath / entry.virtualPath / entry.identifier;
 				newelement->SetAttribute(xml::attrib::ENTRY_SOURCE, reinterpret_cast<const char*>(outputPath.generic_u8string().c_str()));
 			}
+			if (currentVirtualPath != nullptr)
+			{
+				*currentVirtualPath /= entry.identifier;
+			}
 		}
 		else
 		{
@@ -179,10 +183,6 @@ static tinyxml2::XMLElement* WriteXMLEntry(const cd::IsoDirEntries::Entry& entry
 		}
 
 		dirElement = newelement;
-		if (currentVirtualPath != nullptr)
-		{
-			*currentVirtualPath /= entry.identifier;
-		}
 	}
 	else
 	{
@@ -258,10 +258,12 @@ static void WriteXMLPostGap(const unsigned int postGap, tinyxml2::XMLElement* di
 static void WriteXMLByLBA(const std::list<cd::IsoDirEntries::Entry>& files, tinyxml2::XMLElement* dirElement, const fs::path& sourcePath, unsigned int& expectedLBA,
 	EntryAttributeCounters& attributeCounters, const unsigned int postGap)
 {
+	auto* dirTreeElement = dirElement;
 	fs::path currentVirtualPath; // Used to find out whether to traverse 'dir' up or down the chain
 	bool writedPostGap = false;
-	for (const auto& entry : files)
+	for (auto it = std::next(files.begin()); it != files.end(); ++it) // Skip root, it's already prepared
 	{
+		const auto& entry = *it;
 		// if this is a DA file we are at the end of filesystem
 		if (entry.type != EntryType::EntryDA)
 		{
@@ -311,7 +313,7 @@ static void WriteXMLByLBA(const std::list<cd::IsoDirEntries::Entry>& files, tiny
 
 	if (!writedPostGap)
 	{
-		WriteXMLPostGap(postGap, dirElement, expectedLBA);
+		WriteXMLPostGap(postGap, dirTreeElement, expectedLBA);
 	}
 }
 
@@ -337,7 +339,7 @@ static void WriteXMLByDirectories(const cd::IsoDirEntries* directory, tinyxml2::
 	}
 }
 
-unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_ptr<cd::IsoDirEntries>& rootDir, const std::list<cd::IsoDirEntries::Entry*>& DAfiles,
+unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::list<cd::IsoDirEntries::Entry>& entries, const std::list<cd::IsoDirEntries::Entry*>& DAfiles,
 	const unsigned postGap)
 {
 	unique_file file = OpenScopedFile(param::xmlFile, "wb");
@@ -409,21 +411,23 @@ unsigned xml::WriteXML(const cd::ISO_DESCRIPTOR& descriptor, const std::unique_p
 	// Create <default_attributes> now so it lands before the directory tree
 	tinyxml2::XMLElement* defaultAttributesElement = !param::dir ? trackElement->InsertNewChildElement(xml::elem::DEFAULT_ATTRIBUTES) : nullptr;
 
+	// Write out root first
+	const auto& rootDir = entries.front();
 	EntryAttributeCounters attributeCounters;
-	unsigned currentLBA = descriptor.rootDirRecord.entryOffs.lsb;
+	tinyxml2::XMLElement* dirtree = WriteXMLEntry(rootDir, trackElement, nullptr, srcPath, attributeCounters);
+	unsigned currentLBA = descriptor.rootDirRecord.entryOffs.lsb + GetSizeInSectors(rootDir.entry.entrySize.lsb);
 	if (param::outputSortedByDir)
 	{
-		WriteXMLByDirectories(rootDir.get(), trackElement, srcPath, currentLBA, attributeCounters);
-		WriteXMLPostGap(postGap, trackElement->LastChildElement(), currentLBA);
+		WriteXMLByDirectories(rootDir.subdir.get(), dirtree, srcPath, currentLBA, attributeCounters);
+		WriteXMLPostGap(postGap, dirtree, currentLBA);
 	}
 	else
 	{
-		WriteXMLByLBA(rootDir->dirEntryList.GetUnderlyingList(), trackElement, srcPath, currentLBA, attributeCounters, postGap);
+		WriteXMLByLBA(entries, dirtree, srcPath, currentLBA, attributeCounters, postGap);
 	}
 
 	if (defaultAttributesElement != nullptr)
 	{
-		tinyxml2::XMLElement *dirtree = trackElement->FirstChildElement(xml::elem::DIRECTORY_TREE);
 		SimplifyDefaultXMLAttributes(dirtree, EstablishXMLAttributeDefaults(defaultAttributesElement, attributeCounters));
 		if (memcmp(descriptor.volumeCreateDate.year+2, dirtree->Attribute(xml::attrib::ENTRY_DATE)+2, 12) == 0)
 		{

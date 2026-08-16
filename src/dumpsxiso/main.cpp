@@ -857,7 +857,7 @@ void ParseDIR()
 	// Create root
 	std::list<cd::IsoDirEntries::Entry> entries;
 	auto rootDir = std::make_unique<cd::IsoDirEntries>(std::move(ListView(entries)));
-	auto &entry  = rootDir->dirEntryList.EmplaceBack(cd::IsoDirEntries::Entry{.type	= EntryType::EntryDir});
+	auto &entry  = rootDir->dirEntryList.EmplaceBack();
 
 	// Parse directory recursively
 	entry.subdir = ParseSubDIR(ParseSubDIR, rootDir->dirEntryList.NewView(), param::outPath, CdlMAXFILE, 1);
@@ -870,7 +870,7 @@ void ParseDIR()
 
 	// Write XML sorted by directories
 	param::outputSortedByDir  = true;
-	xml::WriteXML(descriptor, rootDir, DAfiles, postGap - DAfiles.size());
+	xml::WriteXML(descriptor, entries, DAfiles, postGap - DAfiles.size());
 	if (!param::QuietMode)
 	{
 		printf("Done.\n");
@@ -1040,7 +1040,7 @@ void ParseISO(cd::IsoReader& reader) {
 			printf("  Creating XML document...");
 		}
 
-		const unsigned currentLBA = xml::WriteXML(descriptor, rootDir, DAfiles, postGap);
+		const unsigned currentLBA = xml::WriteXML(descriptor, entries, DAfiles, postGap);
 
 		if (!param::QuietMode)
 		{
