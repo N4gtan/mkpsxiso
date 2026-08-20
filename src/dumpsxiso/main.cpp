@@ -1009,7 +1009,8 @@ int Main(int argc, char *argv[])
 		"Usage: dumpsxiso [options] <input>\n\n"
 		"  <input>\t\tAny 2352-sector disc image/cue to extract, or a directory to generate an XML project.\n\n"
 		"Options:\n"
-		"  -h|--help\t\tShows this help text\n"
+		"  -h|--help\t\tPrint usage information and exit\n"
+		"  -V|--version\t\tPrint version number and exit\n"
 		"  -q|--quiet\t\tQuiet mode (suppress all but warnings and errors)\n"
 		"  -w|--warns\t\tSuppress all warnings (can be used along with -q)\n"
 		"  -x <path>\t\tOptional destination directory for extracted files (defaults to working dir)\n"
@@ -1028,11 +1029,12 @@ int Main(int argc, char *argv[])
 		"Get the latest version at https://github.com/Lameguy64/mkpsxiso\n"
 		"Original work: Meido-Tek Productions (John \"Lameguy\" Wilbert Villamor/Lameguy64)\n"
 		"Maintained by: Silent (CookiePLMonster) and spicyjpeg\n"
-		"Contributions: marco-calautti, G4Vi, Nagtan and all the ones from github\n\n";
+		"Contributions: marco-calautti, G4Vi, Nagtan and all the ones from github\n";
 
 	if (argc == 1)
 	{
 		printf(VERSION_TEXT);
+		printf("\n");
 		printf(HELP_TEXT);
 		return EXIT_SUCCESS;
 	}
@@ -1044,8 +1046,12 @@ int Main(int argc, char *argv[])
 		{
 			if (ParseArgument(args, "h", "help"))
 			{
-				printf(VERSION_TEXT);
 				printf(HELP_TEXT);
+				return EXIT_SUCCESS;
+			}
+			if (ParseArgument(args, "V", "version"))
+			{
+				printf(VERSION_TEXT);
 				return EXIT_SUCCESS;
 			}
 			if (ParseArgument(args, "f", "force"))
@@ -1151,11 +1157,6 @@ int Main(int argc, char *argv[])
 	if (!param::isoFile.has_filename() && param::isoFile.has_parent_path())
 	{
 		param::isoFile = param::isoFile.parent_path();
-	}
-
-	if (!param::QuietMode)
-	{
-		printf(VERSION_TEXT);
 	}
 
 	if (param::outPath.empty())

@@ -64,7 +64,8 @@ int Main(int argc, char* argv[])
 		"Usage: mkpsxiso [options] <input>\n\n"
 		"  <input>\t\tAny XML project file defining the disc layout to build.\n\n"
 		"Options:\n"
-		"  -h|--help\t\tShows this help text\n"
+		"  -h|--help\t\tPrint usage information and exit\n"
+		"  -V|--version\t\tPrint version number and exit\n"
 		"  -q|--quiet\t\tQuiet mode (suppress all but warnings and errors)\n"
 		"  -w|--warns\t\tSuppress all warnings (can be used along with -q)\n"
 		"  -l|--label\t\tSpecify volume ID (overrides volume element)\n"
@@ -82,11 +83,12 @@ int Main(int argc, char* argv[])
 		"Get the latest version at https://github.com/Lameguy64/mkpsxiso\n"
 		"Original work: Meido-Tek Productions (John \"Lameguy\" Wilbert Villamor/Lameguy64)\n"
 		"Maintained by: Silent (CookiePLMonster) and spicyjpeg\n"
-		"Contributions: marco-calautti, G4Vi, Nagtan and all the ones from github\n\n";
+		"Contributions: marco-calautti, G4Vi, Nagtan and all the ones from github\n";
 
 	if ( argc == 1 )
 	{
 		printf(VERSION_TEXT);
+		printf("\n");
 		printf(HELP_TEXT);
 		return EXIT_SUCCESS;
 	}
@@ -100,8 +102,12 @@ int Main(int argc, char* argv[])
 		{
 			if (ParseArgument(args, "h", "help"))
 			{
-				printf(VERSION_TEXT);
 				printf(HELP_TEXT);
+				return EXIT_SUCCESS;
+			}
+			if (ParseArgument(args, "V", "version"))
+			{
+				printf(VERSION_TEXT);
 				return EXIT_SUCCESS;
 			}
 			if (ParseArgument(args, "noisogen"))
@@ -195,11 +201,6 @@ int Main(int argc, char* argv[])
 	{
 		printf( "No XML script specified.\n" );
 		return EXIT_FAILURE;
-	}
-
-	if ( !global::QuietMode )
-	{
-		printf(VERSION_TEXT);
 	}
 
 	if ( global::LBAfile == "-lba" )
